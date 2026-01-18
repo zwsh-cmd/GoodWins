@@ -419,16 +419,11 @@ async function callGeminiChat(userMessage) {
     chatHistory.appendChild(loadingDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
 
-    // 定義要嘗試的模型清單 (超前部署未來版本)
+    // 定義要嘗試的模型清單 (精簡版：避免觸發 429 請求限制)
     const modelsToTry = [
-        "gemini-3.5-pro",      // 未來旗艦 (預約席)
-        "gemini-3.0-pro",      // 未來旗艦 (預約席)
-        "gemini-2.5-pro",      // 未來旗艦 (預約席)
-        "gemini-2.0-pro",      // 未來旗艦 (預約席)
-        "gemini-1.5-pro",      // 目前最強大腦 (現役主力)
-        "gemini-1.5-flash",    // 速度快 (候補 1)
-        "gemini-1.0-pro",      // 舊版穩定 (候補 2)
-        "gemini-pro"           // 舊版代號 (候補 3)
+        "gemini-1.5-pro",      // 最強大腦 (優先)
+        "gemini-1.5-flash",    // 速度快 (候補)
+        "gemini-1.0-pro"       // 穩定版 (保底)
     ];
 
     try {
