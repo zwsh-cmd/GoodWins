@@ -244,6 +244,20 @@ onAuthStateChanged(auth, (user) => {
 
 // --- 7. 按鈕事件綁定 ---
 
+// [新增] 綁定主畫面的搜尋按鈕 -> 開啟倉庫
+const btnSearch = document.getElementById('btn-search');
+if (btnSearch) {
+    btnSearch.addEventListener('click', () => {
+        // 確保倉庫視窗變數已抓取 (因為它是動態生成的)
+        if (!screens.warehouse) screens.warehouse = document.getElementById('warehouse-modal');
+        
+        if (screens.warehouse) {
+            screens.warehouse.classList.remove('hidden');
+            loadWarehouseData('good'); // 預設載入好事
+        }
+    });
+}
+
 // 登入
 btns.login.addEventListener('click', () => {
     signInWithPopup(auth, provider).catch(err => alert("登入失敗: " + err.message));
