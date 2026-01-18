@@ -21,10 +21,8 @@ const provider = new GoogleAuthProvider();
 
 // --- 4. 動態生成 UI (這就是妳要的：介面寫在 JS 裡) ---
 function createEditorHTML() {
-    // 如果已經有了就不重複建立
     if (document.getElementById('editor-modal')) return;
 
-    // 自定義下拉選單樣式
     const selectStyle = `
         width:100%; 
         padding:12px 40px 12px 12px; 
@@ -39,7 +37,10 @@ function createEditorHTML() {
         appearance: none;
     `;
 
-    // 這裡我們移除了 placeholder，並加上 autocomplete="off"
+    // 修改重點：
+    // 1. label 改為「好事等級」
+    // 2. input 加上 placeholder
+    // 3. 加上 autocomplete="off" 避免瀏覽器跳出歷史選單
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
@@ -49,13 +50,13 @@ function createEditorHTML() {
                 <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
             </div>
 
-            <input id="input-title" type="text" autocomplete="off" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:20px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
+            <input id="input-title" type="text" placeholder="輸入標題..." autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:20px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
             
-            <textarea id="input-content" style="width:100%; flex:1; padding:15px 0; border:none; font-size:16px; outline:none; resize:none; background:transparent; line-height:1.6; color:var(--text-main);"></textarea>
+            <textarea id="input-content" placeholder="輸入內容..." name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:16px; outline:none; resize:none; background:transparent; line-height:1.6; color:var(--text-main);"></textarea>
             
             <div style="padding:20px 0;">
                 <div style="margin-bottom:15px;">
-                    <label style="font-size:12px; color:#999; display:block; margin-bottom:5px;">這件事有多好？</label>
+                    <label id="label-score" style="font-size:12px; color:#999; display:block; margin-bottom:5px;">好事等級</label>
                     <select id="input-score" style="${selectStyle}">
                         <option value="1">1分 - 微好事 (Micro)</option>
                         <option value="2">2分 - 小好事 (Small)</option>
@@ -232,7 +233,6 @@ btns.saveEdit.addEventListener('click', async () => {
         return;
     }
 
-    // --- 新增：按鈕變更狀態，給予使用者回饋 ---
     const originalText = btns.saveEdit.innerText;
     btns.saveEdit.innerText = "儲存中...";
     btns.saveEdit.disabled = true;
@@ -240,7 +240,6 @@ btns.saveEdit.addEventListener('click', async () => {
     try {
         const collectionName = currentMode === 'good' ? 'good_things' : 'bad_things';
         
-        // 1. 存入資料庫
         await addDoc(collection(db, collectionName), {
             uid: currentUser.uid,
             title: title,
@@ -250,9 +249,8 @@ btns.saveEdit.addEventListener('click', async () => {
             createdAt: serverTimestamp()
         });
 
-        screens.editor.classList.add('hidden'); // 關閉編輯器
+        screens.editor.classList.add('hidden'); 
 
-        // 2. 如果是「鳥事」，進入 PK 環節
         if (currentMode === 'bad') {
             startPK({ title, content });
         } else {
@@ -261,42 +259,75 @@ btns.saveEdit.addEventListener('click', async () => {
 
     } catch (e) {
         console.error("Error:", e);
-        alert("儲存失敗：" + e.message);
+        // 詳細錯誤提示，幫助除錯
+        let msg = "儲存失敗：" + e.message;
+        if (e.message.includes("permission-denied") || e.code === "permission-denied") {
+            msg = "儲存失敗：權限不足。\n請確認 Firebase Console 中 Firestore 的規則是否已設為公開 (Test Mode) 或允許寫入。";
+        } else if (e.code === "unimplemented" || e.message.includes("not found")) {
+            msg = "儲存失敗：找不到資料庫。\n請確認您是否已在 Firebase Console 點擊 'Create Database' 啟用 Firestore。";
+        }
+        alert(msg);
     } finally {
-        // --- 恢復按鈕狀態 ---
         btns.saveEdit.innerText = originalText;
         btns.saveEdit.disabled = false;
     }
 });
 
-// --- PK 核心邏輯 ---
+// --- PK 核心邏輯 (AI 升級版) ---
 async function startPK(badThing) {
-    // 1. 顯示 PK 畫面
     screens.pk.classList.remove('hidden');
-    
-    // 2. 填入鳥事內容
     document.getElementById('pk-bad-title').innerText = badThing.title;
     document.getElementById('pk-bad-content').innerText = badThing.content;
 
-    // 3. 尋找一張好事卡 (這裡先簡單抓最新的一張，之後再接 AI)
     const aiCommentEl = document.getElementById('pk-ai-comment');
-    aiCommentEl.innerText = "🔍 AI 正在翻找你的好事庫...";
-    
+    aiCommentEl.innerHTML = "🔍 <b>AI 正在資料庫中搜尋最強好事卡...</b>";
+
     try {
-        // 從 good_things 隨機(或最新)抓一張
         const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1));
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
             const goodThing = querySnapshot.docs[0].data();
             
-            // 填入好事內容
             document.getElementById('pk-good-title').innerText = goodThing.title;
             document.getElementById('pk-good-content').innerText = goodThing.content;
             
-            aiCommentEl.innerText = `找到了一件好事來對抗！\n\n雖然發生了「${badThing.title}」，但別忘了你也曾經「${goodThing.title}」。\n這世界還是很美好的！`;
+            // --- 呼叫 Gemini AI 產生講評 ---
+            const apiKey = sessionStorage.getItem('gemini_key');
+            if (apiKey) {
+                aiCommentEl.innerHTML = "🤖 <b>AI 正在分析戰況...</b>";
+                
+                // 構建 Prompt
+                const prompt = `
+                    我遇到了一件鳥事：「${badThing.title} - ${badThing.content}」。
+                    但我之前發生過一件好事：「${goodThing.title} - ${goodThing.content}」。
+                    請擔任一位有智慧的人生導師，用溫暖、幽默的語氣，分析為什麼這件好事的力量勝過那件鳥事？
+                    請用繁體中文回答，100字以內。
+                `;
+
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.candidates && data.candidates[0].content) {
+                        const aiText = data.candidates[0].content.parts[0].text;
+                        aiCommentEl.innerText = aiText;
+                    } else {
+                        throw new Error("AI 無回應");
+                    }
+                } catch (aiError) {
+                    console.error("AI Error:", aiError);
+                    aiCommentEl.innerText = `雖然 AI 暫時休息中，但這件好事的價值是真實存在的！它證明了你的生活充滿亮點。`;
+                }
+            } else {
+                aiCommentEl.innerText = "請先點擊首頁設定(齒輪)，輸入 Gemini API Key，AI 才能幫你講評喔！";
+            }
+
         } else {
-            // 如果沒好事
             document.getElementById('pk-good-title').innerText = "尚無好事";
             document.getElementById('pk-good-content').innerText = "趕快去記錄一件好事，再來 PK 吧！";
             aiCommentEl.innerText = "你的彈藥庫空空的！快去記錄好事來支援！";
@@ -304,7 +335,7 @@ async function startPK(badThing) {
 
     } catch (e) {
         console.error("PK Error:", e);
-        aiCommentEl.innerText = "AI 連線有點問題，但別擔心，好事總會發生的。";
+        aiCommentEl.innerText = "發生錯誤：請確認資料庫連線。";
     }
 }
 
@@ -337,14 +368,21 @@ function openEditor(mode) {
     inputs.source.value = 'personal';
 
     const titleEl = document.getElementById('editor-title');
-    const scoreLabel = inputs.score.previousElementSibling; 
+    // 使用 ID 抓取 label (因為我們剛剛在 HTML 裡加了 ID)
+    const scoreLabel = document.getElementById('label-score') || inputs.score.previousElementSibling;
     const scoreSelect = inputs.score;
 
     if (mode === 'good') {
         // --- 好事模式 ---
         titleEl.innerText = "記錄一件好事";
         titleEl.style.color = "var(--good-icon)";
-        if (scoreLabel) scoreLabel.innerText = "這件事有多好？";
+        
+        // 設定提示詞
+        inputs.title.placeholder = "標題 (例如：迷路時遇到好心人指路)";
+        inputs.content.placeholder = "寫下發生的經過...";
+        
+        // 設定等級標籤
+        if (scoreLabel) scoreLabel.innerText = "好事等級";
         
         scoreSelect.innerHTML = `
             <option value="1">1分 - 微好事 (Micro)</option>
@@ -357,7 +395,13 @@ function openEditor(mode) {
         // --- 鳥事模式 ---
         titleEl.innerText = "記錄一件鳥事";
         titleEl.style.color = "var(--bad-icon)";
-        if (scoreLabel) scoreLabel.innerText = "這件事有多鳥？";
+        
+        // 設定提示詞
+        inputs.title.placeholder = "標題 (例如：商家服務態度不太好)";
+        inputs.content.placeholder = "寫下發生的經過...";
+        
+        // 設定等級標籤
+        if (scoreLabel) scoreLabel.innerText = "鳥事等級";
         
         scoreSelect.innerHTML = `
             <option value="1">1分 - 微鳥事 (Micro)</option>
