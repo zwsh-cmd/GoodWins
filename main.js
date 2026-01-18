@@ -240,7 +240,13 @@ btns.saveEdit.addEventListener('click', async () => {
     try {
         const collectionName = currentMode === 'good' ? 'good_things' : 'bad_things';
         
-        await addDoc(collection(db, collectionName), {
+        // --- 加上超時機制 (解決卡住問題) ---
+        // 如果 5 秒內資料庫沒回應，就報錯
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout")), 5000)
+        );
+
+        const addDocPromise = addDoc(collection(db, collectionName), {
             uid: currentUser.uid,
             title: title,
             content: content,
@@ -248,6 +254,9 @@ btns.saveEdit.addEventListener('click', async () => {
             source: source,
             createdAt: serverTimestamp()
         });
+
+        // 比賽誰先跑完
+        await Promise.race([addDocPromise, timeoutPromise]);
 
         screens.editor.classList.add('hidden'); 
 
@@ -259,13 +268,16 @@ btns.saveEdit.addEventListener('click', async () => {
 
     } catch (e) {
         console.error("Error:", e);
-        // 詳細錯誤提示，幫助除錯
+        
         let msg = "儲存失敗：" + e.message;
-        if (e.message.includes("permission-denied") || e.code === "permission-denied") {
-            msg = "儲存失敗：權限不足。\n請確認 Firebase Console 中 Firestore 的規則是否已設為公開 (Test Mode) 或允許寫入。";
-        } else if (e.code === "unimplemented" || e.message.includes("not found")) {
-            msg = "儲存失敗：找不到資料庫。\n請確認您是否已在 Firebase Console 點擊 'Create Database' 啟用 Firestore。";
+        
+        // 針對卡住問題的具體建議
+        if (e.message === "Timeout" || e.code === "unavailable") {
+            msg = "儲存逾時！看起來是「資料庫沒開」或「網路不通」。\n\n請務必去 Firebase Console -> Build -> Firestore Database，點擊 [Create Database] 建立資料庫！";
+        } else if (e.message.includes("permission-denied")) {
+             msg = "儲存失敗：權限不足。\n請檢查 Firebase Console 的 Rules 設定。";
         }
+        
         alert(msg);
     } finally {
         btns.saveEdit.innerText = originalText;
