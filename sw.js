@@ -4,8 +4,7 @@ const ASSETS = [
   './index.html',
   './main.js',
   './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './icon.png'
 ];
 
 // 安裝時快取檔案
@@ -15,7 +14,7 @@ self.addEventListener('install', (e) => {
   );
 });
 
-// 讀取時從快取拿資料 (讓離線也能用)
+// 讀取時從快取拿資料
 self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.match(e.request).then((response) => response || fetch(e.request))
