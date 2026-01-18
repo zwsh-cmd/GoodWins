@@ -24,7 +24,7 @@ function createEditorHTML() {
     // 如果已經有了就不重複建立
     if (document.getElementById('editor-modal')) return;
 
-    // 自定義下拉選單樣式 (隱藏預設箭頭，改用背景圖並設定位置)
+    // 自定義下拉選單樣式
     const selectStyle = `
         width:100%; 
         padding:12px 40px 12px 12px; 
@@ -39,6 +39,7 @@ function createEditorHTML() {
         appearance: none;
     `;
 
+    // 這裡我們移除了 placeholder，並加上 autocomplete="off"
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
@@ -48,9 +49,9 @@ function createEditorHTML() {
                 <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
             </div>
 
-            <input id="input-title" type="text" placeholder="標題" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:20px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
+            <input id="input-title" type="text" autocomplete="off" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:20px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
             
-            <textarea id="input-content" placeholder="寫下發生的經過..." style="width:100%; flex:1; padding:15px 0; border:none; font-size:16px; outline:none; resize:none; background:transparent; line-height:1.6; color:var(--text-main);"></textarea>
+            <textarea id="input-content" style="width:100%; flex:1; padding:15px 0; border:none; font-size:16px; outline:none; resize:none; background:transparent; line-height:1.6; color:var(--text-main);"></textarea>
             
             <div style="padding:20px 0;">
                 <div style="margin-bottom:15px;">
@@ -231,6 +232,11 @@ btns.saveEdit.addEventListener('click', async () => {
         return;
     }
 
+    // --- 新增：按鈕變更狀態，給予使用者回饋 ---
+    const originalText = btns.saveEdit.innerText;
+    btns.saveEdit.innerText = "儲存中...";
+    btns.saveEdit.disabled = true;
+
     try {
         const collectionName = currentMode === 'good' ? 'good_things' : 'bad_things';
         
@@ -256,6 +262,10 @@ btns.saveEdit.addEventListener('click', async () => {
     } catch (e) {
         console.error("Error:", e);
         alert("儲存失敗：" + e.message);
+    } finally {
+        // --- 恢復按鈕狀態 ---
+        btns.saveEdit.innerText = originalText;
+        btns.saveEdit.disabled = false;
     }
 });
 
@@ -334,8 +344,6 @@ function openEditor(mode) {
         // --- 好事模式 ---
         titleEl.innerText = "記錄一件好事";
         titleEl.style.color = "var(--good-icon)";
-        // 修改提示語：改成與人相關
-        inputs.title.placeholder = "標題 (例如：迷路時遇到好心人指路)";
         if (scoreLabel) scoreLabel.innerText = "這件事有多好？";
         
         scoreSelect.innerHTML = `
@@ -349,8 +357,6 @@ function openEditor(mode) {
         // --- 鳥事模式 ---
         titleEl.innerText = "記錄一件鳥事";
         titleEl.style.color = "var(--bad-icon)";
-        // 修改提示語：改成與人相關
-        inputs.title.placeholder = "標題 (例如：商家服務態度不太好)";
         if (scoreLabel) scoreLabel.innerText = "這件事有多鳥？";
         
         scoreSelect.innerHTML = `
