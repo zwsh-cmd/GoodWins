@@ -87,50 +87,56 @@ function createEditorHTML() {
 // 馬上執行，把畫面畫出來
 createEditorHTML();
 
-// --- 新增：動態生成 PK 畫面 ---
+// --- 新增：動態生成 PK 畫面 (左右對決 + 聊天室版) ---
 function createPKScreenHTML() {
     if (document.getElementById('pk-screen')) return;
 
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
-        <header style="padding: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #EEE;">
-            <div style="font-size: 20px; font-weight: 800; color: var(--text-main);">PK 擂台</div>
+        <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #EEE; background: #FFF;">
+            <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">PK 擂台</div>
             <button id="btn-exit-pk" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">離開</button>
         </header>
 
-        <main style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 24px;">
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-                <div class="action-card card-bad" style="cursor: default; padding: 20px; border: 2px solid var(--bad-icon);">
-                    <div class="icon-circle" style="width: 40px; height: 40px;">
-                        <svg class="icon-svg" viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+        <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative;">
+            
+            <div style="padding: 15px 15px 10px 15px; background: var(--bg-app); flex-shrink: 0;">
+                <div style="display: flex; gap: 10px;">
+                    <div class="action-card card-bad" style="flex: 1; cursor: default; padding: 15px; border: 2px solid var(--bad-icon); flex-direction: column; align-items: flex-start; gap: 10px; margin: 0;">
+                        <div style="display:flex; align-items:center; gap:8px; color: var(--bad-icon); font-size: 12px; font-weight: 700;">
+                             鳥事
+                        </div>
+                        <div class="card-text" style="width: 100%;">
+                            <h3 id="pk-bad-title" style="margin-bottom: 4px; font-size: 15px; line-height: 1.3;">(標題)</h3>
+                            <p id="pk-bad-content" style="font-size: 12px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
+                        </div>
                     </div>
-                    <div class="card-text">
-                        <h3 id="pk-bad-title" style="margin-bottom: 6px; font-size: 16px;">(鳥事標題)</h3>
-                        <p id="pk-bad-content" style="font-size: 13px; color: var(--text-main); opacity: 0.8;">(內容...)</p>
+
+                    <div class="action-card card-good" style="flex: 1; cursor: default; padding: 15px; border: 2px solid var(--good-icon); flex-direction: column; align-items: flex-start; gap: 10px; margin: 0;">
+                         <div style="display:flex; align-items:center; gap:8px; color: var(--good-icon); font-size: 12px; font-weight: 700;">
+                             好事
+                        </div>
+                        <div class="card-text" style="width: 100%;">
+                            <h3 id="pk-good-title" style="margin-bottom: 4px; font-size: 15px; line-height: 1.3;">(標題)</h3>
+                            <p id="pk-good-content" style="font-size: 12px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
+                        </div>
                     </div>
                 </div>
+            </div>
+
+            <div style="flex: 1; background: #FFF; border-top-left-radius: 20px; border-top-right-radius: 20px; box-shadow: 0 -4px 20px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden;">
                 
-                <div style="text-align: center; font-weight: 900; color: #DDD; font-size: 14px;">⚡ VS ⚡</div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+                    </div>
 
-                <div class="action-card card-good" style="cursor: default; padding: 20px; border: 2px solid var(--good-icon);">
-                    <div class="icon-circle" style="width: 40px; height: 40px;">
-                        <svg class="icon-svg" viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
-                    </div>
-                    <div class="card-text">
-                        <h3 id="pk-good-title" style="margin-bottom: 6px; font-size: 16px;">(好事標題)</h3>
-                        <p id="pk-good-content" style="font-size: 13px; color: var(--text-main); opacity: 0.8;">(內容...)</p>
-                    </div>
+                <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF;">
+                    <input id="chat-input" type="text" placeholder="跟 AI 討論這場 PK..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA;">
+                    <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
                 </div>
             </div>
 
-            <div style="background: #FFF; border-radius: 16px; padding: 20px; box-shadow: var(--shadow); border: 1px solid #EEE;">
-                <div style="font-weight: 700; color: var(--primary); margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
-                    <span>🤖 AI 裁判講評</span>
-                </div>
-                <p id="pk-ai-comment" style="font-size: 15px; color: var(--text-main); line-height: 1.6;">
-                    正在搜尋適合的好事卡來對抗...<br>請稍候...
-                </p>
-            </div>
         </main>
     </div>
     `;
@@ -285,14 +291,24 @@ btns.saveEdit.addEventListener('click', async () => {
     }
 });
 
-// --- PK 核心邏輯 (AI 升級版) ---
+// 全域變數，紀錄當前 PK 的上下文，讓聊天時 AI 知道狀況
+let currentPKContext = { bad: null, good: null };
+
+// --- PK 核心邏輯 (聊天室版) ---
 async function startPK(badThing) {
     screens.pk.classList.remove('hidden');
     document.getElementById('pk-bad-title').innerText = badThing.title;
     document.getElementById('pk-bad-content').innerText = badThing.content;
 
-    const aiCommentEl = document.getElementById('pk-ai-comment');
-    aiCommentEl.innerHTML = "🔍 <b>AI 正在資料庫中搜尋最強好事卡...</b>";
+    // 清空聊天紀錄
+    const chatHistory = document.getElementById('chat-history');
+    chatHistory.innerHTML = '';
+    
+    // 存入上下文
+    currentPKContext.bad = badThing;
+    
+    // 先顯示系統訊息
+    addChatMessage('system', "🔍 正在搜尋好事庫...");
 
     try {
         const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1));
@@ -300,54 +316,124 @@ async function startPK(badThing) {
 
         if (!querySnapshot.empty) {
             const goodThing = querySnapshot.docs[0].data();
+            currentPKContext.good = goodThing; // 存入上下文
             
             document.getElementById('pk-good-title').innerText = goodThing.title;
             document.getElementById('pk-good-content').innerText = goodThing.content;
             
-            // --- 呼叫 Gemini AI 產生講評 ---
-            const apiKey = sessionStorage.getItem('gemini_key');
-            if (apiKey) {
-                aiCommentEl.innerHTML = "🤖 <b>AI 正在分析戰況...</b>";
-                
-                // 構建 Prompt
-                const prompt = `
-                    我遇到了一件鳥事：「${badThing.title} - ${badThing.content}」。
-                    但我之前發生過一件好事：「${goodThing.title} - ${goodThing.content}」。
-                    請擔任一位有智慧的人生導師，用溫暖、幽默的語氣，分析為什麼這件好事的力量勝過那件鳥事？
-                    請用繁體中文回答，100字以內。
-                `;
-
-                try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-                    
-                    const data = await response.json();
-                    if (data.candidates && data.candidates[0].content) {
-                        const aiText = data.candidates[0].content.parts[0].text;
-                        aiCommentEl.innerText = aiText;
-                    } else {
-                        throw new Error("AI 無回應");
-                    }
-                } catch (aiError) {
-                    console.error("AI Error:", aiError);
-                    aiCommentEl.innerText = `雖然 AI 暫時休息中，但這件好事的價值是真實存在的！它證明了你的生活充滿亮點。`;
-                }
-            } else {
-                aiCommentEl.innerText = "請先點擊首頁設定(齒輪)，輸入 Gemini API Key，AI 才能幫你講評喔！";
-            }
+            // 呼叫 AI 進行第一次開場
+            callGeminiChat("請針對這兩件事進行比較，並說明為什麼這件好事的力量可以勝過鳥事？");
 
         } else {
             document.getElementById('pk-good-title').innerText = "尚無好事";
-            document.getElementById('pk-good-content').innerText = "趕快去記錄一件好事，再來 PK 吧！";
-            aiCommentEl.innerText = "你的彈藥庫空空的！快去記錄好事來支援！";
+            document.getElementById('pk-good-content').innerText = "無資料";
+            addChatMessage('ai', "你的彈藥庫空空的！快去記錄一件好事，再來 PK 吧！");
         }
 
     } catch (e) {
         console.error("PK Error:", e);
-        aiCommentEl.innerText = "發生錯誤：請確認資料庫連線。";
+        addChatMessage('system', "發生錯誤：請確認資料庫連線。");
+    }
+}
+
+// --- 聊天功能模組 ---
+
+// 1. 在畫面上新增一條訊息
+function addChatMessage(sender, text) {
+    const chatHistory = document.getElementById('chat-history');
+    const msgDiv = document.createElement('div');
+    
+    // 設定樣式
+    if (sender === 'ai') {
+        msgDiv.style.cssText = "align-self: flex-start; background: #F2F4F6; padding: 12px 16px; border-radius: 18px 18px 18px 4px; font-size: 14px; color: #333; line-height: 1.5; max-width: 85%;";
+        msgDiv.innerHTML = `<strong>🤖 AI</strong><br>${text}`;
+    } else if (sender === 'user') {
+        msgDiv.style.cssText = "align-self: flex-end; background: var(--primary); color: #FFF; padding: 12px 16px; border-radius: 18px 18px 4px 18px; font-size: 14px; line-height: 1.5; max-width: 85%;";
+        msgDiv.innerText = text;
+    } else { // system
+        msgDiv.style.cssText = "align-self: center; background: rgba(0,0,0,0.05); padding: 4px 12px; border-radius: 20px; font-size: 12px; color: #888;";
+        msgDiv.innerText = text;
+    }
+    
+    chatHistory.appendChild(msgDiv);
+    chatHistory.scrollTop = chatHistory.scrollHeight; // 捲動到底部
+}
+
+// 2. 處理發送按鈕
+const btnSendChat = document.getElementById('btn-send-chat');
+if(btnSendChat) {
+    btnSendChat.addEventListener('click', async () => {
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        if (!text) return;
+        
+        // 顯示使用者訊息
+        addChatMessage('user', text);
+        input.value = '';
+        
+        // 呼叫 AI 回覆
+        await callGeminiChat(text);
+    });
+}
+
+// 3. 呼叫 Gemini API (帶入 PK 上下文)
+async function callGeminiChat(userMessage) {
+    const apiKey = sessionStorage.getItem('gemini_key');
+    if (!apiKey) {
+        addChatMessage('system', "請先設定 API Key 才能啟用 AI。");
+        return;
+    }
+
+    // 顯示 AI 正在輸入...
+    const loadingId = 'loading-' + Date.now();
+    const chatHistory = document.getElementById('chat-history');
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = loadingId;
+    loadingDiv.innerText = "🤖 思考中...";
+    loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #AAA; margin-left: 10px;";
+    chatHistory.appendChild(loadingDiv);
+
+    try {
+        const bad = currentPKContext.bad;
+        const good = currentPKContext.good;
+        
+        // 構建 Prompt：每次都帶入上下文，確保 AI 記得我們在 PK 什麼
+        const prompt = `
+            我們正在進行一場「好事 vs 鳥事」的 PK。
+            【鳥事】：${bad ? bad.title + '-' + bad.content : '無'}
+            【好事】：${good ? good.title + '-' + good.content : '無'}
+            
+            使用者的訊息：${userMessage}
+            
+            請扮演一位溫暖、幽默且有智慧的人生導師。
+            如果這是開場，請分析為什麼這件好事勝過鳥事。
+            如果這是對話，請回應使用者的想法，並持續用那件好事來鼓勵使用者。
+            請用繁體中文回答，100字以內。
+        `;
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        
+        const data = await response.json();
+        
+        // 移除 loading
+        const loadingEl = document.getElementById(loadingId);
+        if(loadingEl) loadingEl.remove();
+
+        if (data.candidates && data.candidates[0].content) {
+            const aiText = data.candidates[0].content.parts[0].text;
+            addChatMessage('ai', aiText);
+        } else {
+            addChatMessage('system', "AI 暫時無法回應。");
+        }
+    } catch (e) {
+        console.error(e);
+        const loadingEl = document.getElementById(loadingId);
+        if(loadingEl) loadingEl.remove();
+        addChatMessage('system', "連線錯誤。");
     }
 }
 
