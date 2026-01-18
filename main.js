@@ -1,9 +1,9 @@
 // --- 1. 引入 Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
-// --- 2. 妳的專屬設定碼 (已填入) ---
+// --- 2. 設定碼 ---
 const firebaseConfig = {
     apiKey: "AIzaSyAmWABNFg2GsMP9fQFklTdGkJ8w0LERPrU",
     authDomain: "goodwins-3bc5a.firebaseapp.com",
@@ -19,70 +19,182 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// --- 4. DOM 元素抓取 ---
+// --- 4. 動態生成 UI (這就是妳要的：介面寫在 JS 裡) ---
+function createEditorHTML() {
+    // 如果已經有了就不重複建立
+    if (document.getElementById('editor-modal')) return;
+
+    const editorHTML = `
+    <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
+        <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
+                <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
+                <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
+            </div>
+
+            <input id="input-title" type="text" placeholder="標題 (例如：今天喝了好咖啡)" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:20px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
+            
+            <textarea id="input-content" placeholder="寫下發生的經過..." style="width:100%; flex:1; padding:15px 0; border:none; font-size:16px; outline:none; resize:none; background:transparent; line-height:1.6; color:var(--text-main);"></textarea>
+            
+            <div style="padding:20px 0;">
+                <div style="margin-bottom:15px;">
+                    <label style="font-size:12px; color:#999; display:block; margin-bottom:5px;">這件事有多好？</label>
+                    <select id="input-score" style="width:100%; padding:12px; border:1px solid #EEE; border-radius:12px; background:#FAFAFA; font-size:15px; color:var(--text-main); outline:none;">
+                        <option value="1">1分 - 微好事 (Micro)</option>
+                        <option value="2">2分 - 小好事 (Small)</option>
+                        <option value="3">3分 - 中好事 (Medium)</option>
+                        <option value="4">4分 - 大好事 (Big)</option>
+                        <option value="5">5分 - 神聖好事 (Divine)</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size:12px; color:#999; display:block; margin-bottom:5px;">來源</label>
+                    <select id="input-source" style="width:100%; padding:12px; border:1px solid #EEE; border-radius:12px; background:#FAFAFA; font-size:15px; color:var(--text-main); outline:none;">
+                        <option value="personal">個人經驗</option>
+                        <option value="inference">推論觀察</option>
+                        <option value="others">他人經驗</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    // 把它插入到 mobile-wrapper 裡面，這樣才不會跑版
+    const wrapper = document.getElementById('mobile-wrapper');
+    if(wrapper) {
+        wrapper.insertAdjacentHTML('beforeend', editorHTML);
+    }
+}
+
+// 馬上執行，把畫面畫出來
+createEditorHTML();
+
+
+// --- 5. 變數與 DOM 抓取 (介面產生後才能抓) ---
+let currentUser = null;
+let currentMode = '';
+
 const screens = {
     login: document.getElementById('login-screen'),
     app: document.getElementById('app-screen'),
-    apiModal: document.getElementById('api-modal')
+    apiModal: document.getElementById('api-modal'),
+    editor: document.getElementById('editor-modal')
 };
+
+const inputs = {
+    title: document.getElementById('input-title'),
+    content: document.getElementById('input-content'),
+    score: document.getElementById('input-score'),
+    source: document.getElementById('input-source')
+};
+
 const btns = {
     login: document.getElementById('btn-login'),
-    saveKey: document.getElementById('btn-save-key')
+    saveKey: document.getElementById('btn-save-key'),
+    cancelEdit: document.getElementById('btn-cancel-edit'),
+    saveEdit: document.getElementById('btn-save-edit')
 };
 
-// --- 5. 狀態管理邏輯 ---
-
-// 監聽登入狀態
+// --- 6. 狀態監聽 ---
 onAuthStateChanged(auth, (user) => {
     if (user) {
-        // 已登入
-        console.log("使用者已登入:", user.displayName);
+        currentUser = user;
+        console.log("已登入:", user.displayName);
         showScreen('app');
-        checkApiKey(); // 檢查有沒有輸入過 Key
+        checkApiKey();
     } else {
-        // 未登入
         showScreen('login');
     }
 });
 
-// 登入按鈕功能
+// --- 7. 按鈕事件綁定 ---
+
+// 登入
 btns.login.addEventListener('click', () => {
-    signInWithPopup(auth, provider)
-        .then((result) => {
-            // 登入成功，onAuthStateChanged 會自動處理後續
-        }).catch((error) => {
-            console.error("登入失敗:", error);
-            alert("登入失敗，請重試");
-        });
+    signInWithPopup(auth, provider).catch(err => alert("登入失敗: " + err.message));
 });
 
-// API Key 處理 (存於 Session Storage，關閉分頁即消失)
+// 開啟編輯器 (使用 querySelector 因為這些是 class)
+document.querySelector('.card-good').addEventListener('click', () => {
+    openEditor('good');
+});
+
+document.querySelector('.card-bad').addEventListener('click', () => {
+    openEditor('bad');
+});
+
+// 取消編輯
+btns.cancelEdit.addEventListener('click', () => {
+    screens.editor.classList.add('hidden');
+});
+
+// 儲存邏輯
+btns.saveEdit.addEventListener('click', async () => {
+    const title = inputs.title.value.trim();
+    const content = inputs.content.value.trim();
+    const score = parseInt(inputs.score.value);
+    const source = inputs.source.value;
+
+    if (!title || !content) {
+        alert("標題和內容都要寫喔！");
+        return;
+    }
+
+    try {
+        const collectionName = currentMode === 'good' ? 'good_things' : 'bad_things';
+        await addDoc(collection(db, collectionName), {
+            uid: currentUser.uid,
+            title: title,
+            content: content,
+            score: score,
+            source: source,
+            createdAt: serverTimestamp()
+        });
+        alert("儲存成功！");
+        screens.editor.classList.add('hidden');
+    } catch (e) {
+        console.error("Error:", e);
+        alert("儲存失敗：" + e.message);
+    }
+});
+
+// API Key 相關
 function checkApiKey() {
     const key = sessionStorage.getItem('gemini_key');
-    if (!key) {
-        // 如果沒有 Key，跳出輸入框
-        screens.apiModal.classList.remove('hidden');
-    }
+    if (!key) screens.apiModal.classList.remove('hidden');
 }
 
 btns.saveKey.addEventListener('click', () => {
-    const input = document.getElementById('input-api-key');
-    const key = input.value.trim();
-    if (key.length > 10) {
+    const key = document.getElementById('input-api-key').value.trim();
+    if (key) {
         sessionStorage.setItem('gemini_key', key);
         screens.apiModal.classList.add('hidden');
-        alert("金鑰已暫存，可以開始使用了！");
-    } else {
-        alert("請輸入有效的 API Key");
     }
 });
 
-// --- 輔助函式: 切換畫面 ---
-function showScreen(screenName) {
-    // 隱藏所有畫面
-    Object.values(screens).forEach(el => el.classList.add('hidden'));
-    
-    // 顯示指定畫面
-    if (screenName === 'login') screens.login.classList.remove('hidden');
-    if (screenName === 'app') screens.app.classList.remove('hidden');
+// --- 輔助函式 ---
+function showScreen(name) {
+    Object.values(screens).forEach(el => el && el.classList.add('hidden'));
+    if (name === 'login') screens.login.classList.remove('hidden');
+    if (name === 'app') screens.app.classList.remove('hidden');
+}
+
+function openEditor(mode) {
+    currentMode = mode;
+    inputs.title.value = '';
+    inputs.content.value = '';
+    inputs.score.value = '1';
+    inputs.source.value = 'personal';
+
+    const titleEl = document.getElementById('editor-title');
+    if (mode === 'good') {
+        titleEl.innerText = "記錄一件好事";
+        titleEl.style.color = "var(--good-icon)";
+    } else {
+        titleEl.innerText = "記錄一件鳥事";
+        titleEl.style.color = "var(--bad-icon)";
+    }
+    screens.editor.classList.remove('hidden');
 }
