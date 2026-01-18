@@ -120,11 +120,10 @@ function showSystemMessage(msg) {
     }
 }
 
-// --- 新增：動態生成 PK 畫面 (樣式優化版) ---
+// --- 動態生成 PK 畫面 (修正版：無框線、無PK字樣、修復聊天) ---
 function createPKScreenHTML() {
     if (document.getElementById('pk-screen')) return;
 
-    // 我們透過統一的 padding (20px) 來確保上下對齊
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
@@ -134,27 +133,25 @@ function createPKScreenHTML() {
 
         <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 15px;">
             
-            <div style="display: flex; align-items: stretch; gap: 10px; flex-shrink: 0;">
-                <div class="action-card" style="flex: 1; cursor: default; padding: 15px; background: var(--bad-light); border: 2px solid var(--bad-icon); border-radius: 16px; display: flex; flex-direction: column; gap: 8px;">
-                    <div style="color: var(--bad-icon); font-size: 12px; font-weight: 700;">鳥事</div>
+            <div style="display: flex; align-items: stretch; gap: 15px; flex-shrink: 0;">
+                <div class="action-card" style="flex: 1; cursor: default; padding: 20px; background: var(--bad-light); border: none; border-radius: 20px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
                     <div style="flex: 1;">
-                        <h3 id="pk-bad-title" style="margin: 0 0 4px 0; font-size: 15px; color: var(--text-main); line-height: 1.3;">(標題)</h3>
-                        <p id="pk-bad-content" style="margin: 0; font-size: 12px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
+                        <h3 id="pk-bad-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4;">(標題)</h3>
+                        <p id="pk-bad-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
                     </div>
                 </div>
 
-                <div style="display: flex; align-items: center; justify-content: center; font-style: italic; font-weight: 900; color: #CCC; font-size: 20px;">PK</div>
-
-                <div class="action-card" style="flex: 1; cursor: default; padding: 15px; background: var(--good-light); border: 2px solid var(--good-icon); border-radius: 16px; display: flex; flex-direction: column; gap: 8px;">
-                     <div style="color: var(--good-icon); font-size: 12px; font-weight: 700;">好事</div>
+                <div class="action-card" style="flex: 1; cursor: default; padding: 20px; background: var(--good-light); border: none; border-radius: 20px; display: flex; flex-direction: column; gap: 8px;">
+                     <div style="color: var(--good-icon); font-size: 13px; font-weight: 700;">好事</div>
                      <div style="flex: 1;">
-                        <h3 id="pk-good-title" style="margin: 0 0 4px 0; font-size: 15px; color: var(--text-main); line-height: 1.3;">(標題)</h3>
-                        <p id="pk-good-content" style="margin: 0; font-size: 12px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
+                        <h3 id="pk-good-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4;">(標題)</h3>
+                        <p id="pk-good-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
                     </div>
                 </div>
             </div>
 
-            <div style="flex: 1; background: #FFF; border-radius: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02);">
+            <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02);">
                 <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF;">
                     <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main);">
@@ -171,6 +168,25 @@ function createPKScreenHTML() {
     const wrapper = document.getElementById('mobile-wrapper');
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', pkHTML);
+        
+        // --- 關鍵修復：在這裡直接綁定聊天按鈕，保證一定抓得到 ---
+        const btnSend = document.getElementById('btn-send-chat');
+        const inputChat = document.getElementById('chat-input');
+        
+        const handleSend = async () => {
+            const text = inputChat.value.trim();
+            if (!text) return;
+            addChatMessage('user', text);
+            inputChat.value = '';
+            await callGeminiChat(text);
+        };
+
+        if(btnSend) btnSend.addEventListener('click', handleSend);
+        if(inputChat) {
+            inputChat.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleSend();
+            });
+        }
     }
 }
 createPKScreenHTML();
@@ -316,7 +332,7 @@ btns.saveEdit.addEventListener('click', async () => {
 // 全域變數，紀錄當前 PK 的上下文，讓聊天時 AI 知道狀況
 let currentPKContext = { bad: null, good: null };
 
-// --- PK 核心邏輯 (聊天室版) ---
+// --- PK 核心邏輯 (乾淨版) ---
 async function startPK(badThing) {
     screens.pk.classList.remove('hidden');
     document.getElementById('pk-bad-title').innerText = badThing.title;
@@ -329,8 +345,8 @@ async function startPK(badThing) {
     // 存入上下文
     currentPKContext.bad = badThing;
     
-    // 先顯示系統訊息
-    addChatMessage('system', "🔍 正在搜尋好事庫...");
+    // 顯示純文字系統訊息
+    addChatMessage('system', "正在搜尋好事庫...");
 
     try {
         const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1));
@@ -338,88 +354,76 @@ async function startPK(badThing) {
 
         if (!querySnapshot.empty) {
             const goodThing = querySnapshot.docs[0].data();
-            currentPKContext.good = goodThing; // 存入上下文
+            currentPKContext.good = goodThing; 
             
             document.getElementById('pk-good-title').innerText = goodThing.title;
             document.getElementById('pk-good-content').innerText = goodThing.content;
             
-            // 呼叫 AI 進行第一次開場
-            callGeminiChat("請針對這兩件事進行比較，並說明為什麼這件好事的力量可以勝過鳥事？");
+            callGeminiChat("請比較這兩件事，並用溫暖的語氣告訴我，為什麼這件好事的價值勝過那件鳥事？");
 
         } else {
             document.getElementById('pk-good-title').innerText = "尚無好事";
-            document.getElementById('pk-good-content').innerText = "無資料";
+            document.getElementById('pk-good-content').innerText = "尚無資料";
             addChatMessage('ai', "你的彈藥庫空空的！快去記錄一件好事，再來 PK 吧！");
         }
 
     } catch (e) {
         console.error("PK Error:", e);
-        addChatMessage('system', "發生錯誤：請確認資料庫連線。");
+        addChatMessage('system', "系統錯誤：請確認網路或資料庫連線。");
     }
 }
 
 // --- 聊天功能模組 ---
 
-// 1. 在畫面上新增一條訊息
+// 1. 在畫面上新增一條訊息 (風格一致版)
 function addChatMessage(sender, text) {
     const chatHistory = document.getElementById('chat-history');
     const msgDiv = document.createElement('div');
     
     // 設定樣式
     if (sender === 'ai') {
-        msgDiv.style.cssText = "align-self: flex-start; background: #F2F4F6; padding: 12px 16px; border-radius: 18px 18px 18px 4px; font-size: 14px; color: #333; line-height: 1.5; max-width: 85%;";
-        msgDiv.innerHTML = `<strong>🤖 AI</strong><br>${text}`;
+        // AI 訊息：淺灰底，無圖示，純文字
+        msgDiv.style.cssText = "align-self: flex-start; background: #F7F7F7; padding: 14px 16px; border-radius: 16px 16px 16px 4px; font-size: 14px; color: var(--text-main); line-height: 1.6; max-width: 85%;";
+        msgDiv.innerHTML = `<div style="font-weight:700; font-size:12px; color:#AAA; margin-bottom:4px;">AI</div>${text}`;
     } else if (sender === 'user') {
-        msgDiv.style.cssText = "align-self: flex-end; background: var(--primary); color: #FFF; padding: 12px 16px; border-radius: 18px 18px 4px 18px; font-size: 14px; line-height: 1.5; max-width: 85%;";
+        // 使用者訊息：主色調底，白字
+        msgDiv.style.cssText = "align-self: flex-end; background: var(--primary); color: #FFF; padding: 12px 16px; border-radius: 16px 16px 4px 16px; font-size: 14px; line-height: 1.6; max-width: 85%; box-shadow: 0 2px 5px rgba(0,0,0,0.1);";
         msgDiv.innerText = text;
-    } else { // system
-        msgDiv.style.cssText = "align-self: center; background: rgba(0,0,0,0.05); padding: 4px 12px; border-radius: 20px; font-size: 12px; color: #888;";
+    } else { 
+        // 系統訊息：極簡灰字
+        msgDiv.style.cssText = "align-self: center; padding: 8px; font-size: 12px; color: #BBB;";
         msgDiv.innerText = text;
     }
     
     chatHistory.appendChild(msgDiv);
-    chatHistory.scrollTop = chatHistory.scrollHeight; // 捲動到底部
+    // 自動捲動到底部
+    chatHistory.scrollTop = chatHistory.scrollHeight; 
 }
 
-// 2. 處理發送按鈕
-const btnSendChat = document.getElementById('btn-send-chat');
-if(btnSendChat) {
-    btnSendChat.addEventListener('click', async () => {
-        const input = document.getElementById('chat-input');
-        const text = input.value.trim();
-        if (!text) return;
-        
-        // 顯示使用者訊息
-        addChatMessage('user', text);
-        input.value = '';
-        
-        // 呼叫 AI 回覆
-        await callGeminiChat(text);
-    });
-}
 
-// 3. 呼叫 Gemini API (帶入 PK 上下文)
+
+// 3. 呼叫 Gemini API
 async function callGeminiChat(userMessage) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey) {
-        addChatMessage('system', "請先設定 API Key 才能啟用 AI。");
+        addChatMessage('system', "請先點擊設定輸入 API Key。");
         return;
     }
 
-    // 顯示 AI 正在輸入...
+    // 顯示簡潔的思考中狀態
     const loadingId = 'loading-' + Date.now();
     const chatHistory = document.getElementById('chat-history');
     const loadingDiv = document.createElement('div');
     loadingDiv.id = loadingId;
-    loadingDiv.innerText = "🤖 思考中...";
-    loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #AAA; margin-left: 10px;";
+    loadingDiv.innerText = "Thinking...";
+    loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic;";
     chatHistory.appendChild(loadingDiv);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
 
     try {
         const bad = currentPKContext.bad;
         const good = currentPKContext.good;
         
-        // 構建 Prompt：每次都帶入上下文，確保 AI 記得我們在 PK 什麼
         const prompt = `
             我們正在進行一場「好事 vs 鳥事」的 PK。
             【鳥事】：${bad ? bad.title + '-' + bad.content : '無'}
@@ -428,9 +432,8 @@ async function callGeminiChat(userMessage) {
             使用者的訊息：${userMessage}
             
             請扮演一位溫暖、幽默且有智慧的人生導師。
-            如果這是開場，請分析為什麼這件好事勝過鳥事。
-            如果這是對話，請回應使用者的想法，並持續用那件好事來鼓勵使用者。
-            請用繁體中文回答，100字以內。
+            如果不滿100字，請用溫暖的語氣分析為什麼這件好事的價值勝過那件鳥事。
+            請用繁體中文回答，不使用 Emoji。
         `;
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
@@ -441,7 +444,6 @@ async function callGeminiChat(userMessage) {
         
         const data = await response.json();
         
-        // 移除 loading
         const loadingEl = document.getElementById(loadingId);
         if(loadingEl) loadingEl.remove();
 
