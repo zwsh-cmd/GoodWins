@@ -189,12 +189,37 @@ function openEditor(mode) {
     inputs.source.value = 'personal';
 
     const titleEl = document.getElementById('editor-title');
+    const scoreLabel = inputs.score.previousElementSibling; // 抓取選單上面的標籤文字
+    const scoreSelect = inputs.score;
+
     if (mode === 'good') {
+        // --- 好事模式 ---
         titleEl.innerText = "記錄一件好事";
         titleEl.style.color = "var(--good-icon)";
+        inputs.title.placeholder = "標題 (例如：今天喝了好咖啡)";
+        if (scoreLabel) scoreLabel.innerText = "這件事有多好？";
+        
+        scoreSelect.innerHTML = `
+            <option value="1">1分 - 微好事 (Micro)</option>
+            <option value="2">2分 - 小好事 (Small)</option>
+            <option value="3">3分 - 中好事 (Medium)</option>
+            <option value="4">4分 - 大好事 (Big)</option>
+            <option value="5">5分 - 神聖好事 (Divine)</option>
+        `;
     } else {
+        // --- 鳥事模式 ---
         titleEl.innerText = "記錄一件鳥事";
         titleEl.style.color = "var(--bad-icon)";
+        inputs.title.placeholder = "標題 (例如：踩到狗屎...)";
+        if (scoreLabel) scoreLabel.innerText = "這件事有多鳥？";
+        
+        scoreSelect.innerHTML = `
+            <option value="1">1分 - 微鳥事 (Micro)</option>
+            <option value="2">2分 - 小鳥事 (Small)</option>
+            <option value="3">3分 - 中鳥事 (Medium)</option>
+            <option value="4">4分 - 大鳥事 (Big)</option>
+            <option value="5">5分 - 魔王鳥事 (Monster)</option>
+        `;
     }
     screens.editor.classList.remove('hidden');
 }
