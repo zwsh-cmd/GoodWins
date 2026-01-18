@@ -128,7 +128,10 @@ function createPKScreenHTML() {
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
             <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">PK 擂台</div>
-            <button id="btn-exit-pk" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">離開</button>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button id="btn-open-warehouse" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:var(--primary); font-weight:bold;">倉庫</button>
+                <button id="btn-exit-pk" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">離開</button>
+            </div>
         </header>
 
         <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 15px;">
@@ -201,7 +204,8 @@ const screens = {
     app: document.getElementById('app-screen'),
     apiModal: document.getElementById('api-modal'),
     editor: document.getElementById('editor-modal'),
-    pk: document.getElementById('pk-screen') // 新增
+    pk: document.getElementById('pk-screen'),
+    warehouse: document.getElementById('warehouse-modal') // 新增倉庫
 };
 
 // 補上 PK 離開按鈕的監聽
@@ -437,8 +441,12 @@ async function callGeminiChat(userMessage) {
             
             使用者的訊息：${userMessage}
             
-            請扮演一位溫暖、幽默且有智慧的人生導師。
-            如果不滿100字，請用溫暖的語氣分析為什麼這件好事的價值勝過那件鳥事。
+            請扮演一位智慧的人生導師。
+            重點分析：為什麼這張「好事卡」的價值可以打敗「鳥事卡」。
+            限制：
+            1. 回應長度請控制在 200 字以內。
+            2. 講重點，不要廢話。
+            3. 如果理由很簡單，50字以內也沒問題。
             請用繁體中文回答，不使用 Emoji。
         `;
 
@@ -563,4 +571,112 @@ function openEditor(mode) {
         `;
     }
     screens.editor.classList.remove('hidden');
+}
+
+// --- 8. 倉庫 (Warehouse) 功能模組 ---
+function createWarehouseHTML() {
+    if (document.getElementById('warehouse-modal')) return;
+
+    const warehouseHTML = `
+    <div id="warehouse-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:200; display: flex; flex-direction: column;">
+        <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
+            <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">卡片倉庫</div>
+            <button id="btn-close-warehouse" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">關閉</button>
+        </header>
+        <div style="padding: 10px 20px; display: flex; gap: 10px;">
+            <button id="tab-good" style="flex: 1; padding: 10px; border: none; border-radius: 10px; background: var(--good-light); color: var(--good-icon); font-weight: 700; cursor: pointer;">好事卡</button>
+            <button id="tab-bad" style="flex: 1; padding: 10px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer;">鳥事卡</button>
+        </div>
+        <div id="warehouse-list" style="flex: 1; overflow-y: auto; padding: 0 20px 20px 20px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="text-align:center; color:#999; margin-top:50px;">載入中...</div>
+        </div>
+    </div>
+    `;
+    
+    const wrapper = document.getElementById('mobile-wrapper');
+    if(wrapper) wrapper.insertAdjacentHTML('beforeend', warehouseHTML);
+
+    // 綁定倉庫內部按鈕
+    document.getElementById('btn-close-warehouse').addEventListener('click', () => {
+        document.getElementById('warehouse-modal').classList.add('hidden');
+    });
+
+    document.getElementById('tab-good').addEventListener('click', () => loadWarehouseData('good'));
+    document.getElementById('tab-bad').addEventListener('click', () => loadWarehouseData('bad'));
+}
+
+// 建立倉庫 HTML
+createWarehouseHTML();
+
+// 綁定 PK 畫面的「倉庫」按鈕 (因為 HTML 是動態生成的，這裡要延遲綁定或確保元素存在)
+// 這裡我們利用事件委派，或是直接抓取 (因為 createPKScreenHTML 已經執行過)
+const btnOpenWarehouse = document.getElementById('btn-open-warehouse');
+if(btnOpenWarehouse) {
+    btnOpenWarehouse.addEventListener('click', () => {
+        // 更新 screens 物件，確保抓得到新生成的 warehouse-modal
+        screens.warehouse = document.getElementById('warehouse-modal'); 
+        screens.warehouse.classList.remove('hidden');
+        loadWarehouseData('good'); // 預設載入好事
+    });
+}
+
+// 載入倉庫資料
+async function loadWarehouseData(type) {
+    const listEl = document.getElementById('warehouse-list');
+    const tabGood = document.getElementById('tab-good');
+    const tabBad = document.getElementById('tab-bad');
+    
+    listEl.innerHTML = '<div style="text-align:center; color:#999; margin-top:50px;">讀取中...</div>';
+
+    // 切換 Tab 樣式
+    if(type === 'good') {
+        tabGood.style.background = 'var(--good-light)'; tabGood.style.color = 'var(--good-icon)';
+        tabBad.style.background = '#EEE'; tabBad.style.color = '#999';
+    } else {
+        tabGood.style.background = '#EEE'; tabGood.style.color = '#999';
+        tabBad.style.background = 'var(--bad-light)'; tabBad.style.color = 'var(--bad-icon)';
+    }
+
+    const collectionName = type === 'good' ? 'good_things' : 'bad_things';
+
+    try {
+        // 抓取最近 20 筆
+        const q = query(collection(db, collectionName), orderBy("createdAt", "desc"), limit(20));
+        const querySnapshot = await getDocs(q);
+        
+        listEl.innerHTML = ''; // 清空
+
+        if (querySnapshot.empty) {
+            listEl.innerHTML = '<div style="text-align:center; color:#CCC; margin-top:50px;">這裡空空的</div>';
+            return;
+        }
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const date = data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : '剛剛';
+            const cardColor = type === 'good' ? 'var(--good-light)' : 'var(--bad-light)';
+            const iconColor = type === 'good' ? 'var(--good-icon)' : 'var(--bad-icon)';
+
+            const cardHTML = `
+                <div style="background: #FFF; padding: 15px; border-radius: 12px; border: 1px solid #F0F0F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; gap: 10px;">
+                    <div style="width: 4px; background: ${iconColor}; border-radius: 2px;"></div>
+                    <div style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="font-weight: 700; color: var(--text-main); font-size: 15px;">${data.title}</span>
+                            <span style="font-size: 12px; color: #BBB;">${date}</span>
+                        </div>
+                        <div style="font-size: 13px; color: #666; line-height: 1.4;">${data.content}</div>
+                        <div style="margin-top: 8px; font-size: 12px; color: ${iconColor}; font-weight: 700;">
+                            等級: ${data.score || 1}
+                        </div>
+                    </div>
+                </div>
+            `;
+            listEl.insertAdjacentHTML('beforeend', cardHTML);
+        });
+
+    } catch (e) {
+        console.error("Load Error:", e);
+        listEl.innerHTML = '<div style="text-align:center; color:red; margin-top:50px;">讀取失敗，請檢查網路</div>';
+    }
 }
