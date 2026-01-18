@@ -244,11 +244,19 @@ onAuthStateChanged(auth, (user) => {
 
 // --- 7. 按鈕事件綁定 ---
 
-// [新增] 綁定主畫面的搜尋按鈕 -> 開啟倉庫
+// [修改] 綁定主畫面的搜尋按鈕 -> 顯示提示
 const btnSearch = document.getElementById('btn-search');
 if (btnSearch) {
     btnSearch.addEventListener('click', () => {
-        // 確保倉庫視窗變數已抓取 (因為它是動態生成的)
+        showSystemMessage("🔍 搜尋功能開發中...\n(請點擊左邊的資料夾圖示開啟倉庫)");
+    });
+}
+
+// [新增] 綁定主畫面的倉庫按鈕 -> 開啟倉庫
+const btnWarehouseEntry = document.getElementById('btn-warehouse-entry');
+if (btnWarehouseEntry) {
+    btnWarehouseEntry.addEventListener('click', () => {
+        // 確保倉庫視窗變數已抓取
         if (!screens.warehouse) screens.warehouse = document.getElementById('warehouse-modal');
         
         if (screens.warehouse) {
