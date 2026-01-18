@@ -421,7 +421,7 @@ async function callGeminiChat(userMessage) {
 
     // 定義要嘗試的模型清單 (精簡版：避免觸發 429 請求限制)
     const modelsToTry = [
-        "gemini-1.5-pro",      // 最強大腦 (優先)
+        "gemini-2.5-flash",      // 最強大腦 (優先)
         "gemini-1.5-flash",    // 速度快 (候補)
         "gemini-1.0-pro"       // 穩定版 (保底)
     ];
