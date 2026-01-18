@@ -24,6 +24,21 @@ function createEditorHTML() {
     // 如果已經有了就不重複建立
     if (document.getElementById('editor-modal')) return;
 
+    // 自定義下拉選單樣式 (隱藏預設箭頭，改用背景圖並設定位置)
+    const selectStyle = `
+        width:100%; 
+        padding:12px 40px 12px 12px; 
+        border:1px solid #EEE; 
+        border-radius:12px; 
+        background:#FAFAFA url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235A5A5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 16px center; 
+        background-size: 16px;
+        font-size:15px; 
+        color:var(--text-main); 
+        outline:none; 
+        -webkit-appearance: none; 
+        appearance: none;
+    `;
+
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
@@ -33,14 +48,14 @@ function createEditorHTML() {
                 <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
             </div>
 
-            <input id="input-title" type="text" placeholder="標題 (例如：今天喝了好咖啡)" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:20px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
+            <input id="input-title" type="text" placeholder="標題" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:20px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
             
             <textarea id="input-content" placeholder="寫下發生的經過..." style="width:100%; flex:1; padding:15px 0; border:none; font-size:16px; outline:none; resize:none; background:transparent; line-height:1.6; color:var(--text-main);"></textarea>
             
             <div style="padding:20px 0;">
                 <div style="margin-bottom:15px;">
                     <label style="font-size:12px; color:#999; display:block; margin-bottom:5px;">這件事有多好？</label>
-                    <select id="input-score" style="width:100%; padding:12px; border:1px solid #EEE; border-radius:12px; background:#FAFAFA; font-size:15px; color:var(--text-main); outline:none;">
+                    <select id="input-score" style="${selectStyle}">
                         <option value="1">1分 - 微好事 (Micro)</option>
                         <option value="2">2分 - 小好事 (Small)</option>
                         <option value="3">3分 - 中好事 (Medium)</option>
@@ -50,7 +65,7 @@ function createEditorHTML() {
                 </div>
                 <div>
                     <label style="font-size:12px; color:#999; display:block; margin-bottom:5px;">來源</label>
-                    <select id="input-source" style="width:100%; padding:12px; border:1px solid #EEE; border-radius:12px; background:#FAFAFA; font-size:15px; color:var(--text-main); outline:none;">
+                    <select id="input-source" style="${selectStyle}">
                         <option value="personal">個人經驗</option>
                         <option value="inference">推論觀察</option>
                         <option value="others">他人經驗</option>
@@ -61,7 +76,6 @@ function createEditorHTML() {
     </div>
     `;
     
-    // 把它插入到 mobile-wrapper 裡面，這樣才不會跑版
     const wrapper = document.getElementById('mobile-wrapper');
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', editorHTML);
@@ -117,13 +131,24 @@ btns.login.addEventListener('click', () => {
 });
 
 // 開啟編輯器 (使用 querySelector 因為這些是 class)
-document.querySelector('.card-good').addEventListener('click', () => {
-    openEditor('good');
-});
+const btnGood = document.querySelector('.card-good');
+const btnBad = document.querySelector('.card-bad');
 
-document.querySelector('.card-bad').addEventListener('click', () => {
-    openEditor('bad');
-});
+// 移除 HTML 中舊有的 onclick alert
+if (btnGood) btnGood.removeAttribute('onclick');
+if (btnBad) btnBad.removeAttribute('onclick');
+
+if (btnGood) {
+    btnGood.addEventListener('click', () => {
+        openEditor('good');
+    });
+}
+
+if (btnBad) {
+    btnBad.addEventListener('click', () => {
+        openEditor('bad');
+    });
+}
 
 // 取消編輯
 btns.cancelEdit.addEventListener('click', () => {
@@ -189,14 +214,15 @@ function openEditor(mode) {
     inputs.source.value = 'personal';
 
     const titleEl = document.getElementById('editor-title');
-    const scoreLabel = inputs.score.previousElementSibling; // 抓取選單上面的標籤文字
+    const scoreLabel = inputs.score.previousElementSibling; 
     const scoreSelect = inputs.score;
 
     if (mode === 'good') {
         // --- 好事模式 ---
         titleEl.innerText = "記錄一件好事";
         titleEl.style.color = "var(--good-icon)";
-        inputs.title.placeholder = "標題 (例如：今天喝了好咖啡)";
+        // 修改提示語：改成與人相關
+        inputs.title.placeholder = "標題 (例如：迷路時遇到好心人指路)";
         if (scoreLabel) scoreLabel.innerText = "這件事有多好？";
         
         scoreSelect.innerHTML = `
@@ -210,7 +236,8 @@ function openEditor(mode) {
         // --- 鳥事模式 ---
         titleEl.innerText = "記錄一件鳥事";
         titleEl.style.color = "var(--bad-icon)";
-        inputs.title.placeholder = "標題 (例如：踩到狗屎...)";
+        // 修改提示語：改成與人相關
+        inputs.title.placeholder = "標題 (例如：商家服務態度不太好)";
         if (scoreLabel) scoreLabel.innerText = "這件事有多鳥？";
         
         scoreSelect.innerHTML = `
