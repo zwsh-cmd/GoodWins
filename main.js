@@ -402,7 +402,7 @@ function addChatMessage(sender, text) {
 
 
 
-// 3. 呼叫 Gemini API
+// 3. 呼叫 Gemini API (自動輪詢多個模型版本)
 async function callGeminiChat(userMessage) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey) {
@@ -410,7 +410,6 @@ async function callGeminiChat(userMessage) {
         return;
     }
 
-    // 顯示簡潔的思考中狀態
     const loadingId = 'loading-' + Date.now();
     const chatHistory = document.getElementById('chat-history');
     const loadingDiv = document.createElement('div');
@@ -419,6 +418,18 @@ async function callGeminiChat(userMessage) {
     loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic;";
     chatHistory.appendChild(loadingDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
+
+    // 定義要嘗試的模型清單 (超前部署未來版本)
+    const modelsToTry = [
+        "gemini-3.5-pro",      // 未來旗艦 (預約席)
+        "gemini-3.0-pro",      // 未來旗艦 (預約席)
+        "gemini-2.5-pro",      // 未來旗艦 (預約席)
+        "gemini-2.0-pro",      // 未來旗艦 (預約席)
+        "gemini-1.5-pro",      // 目前最強大腦 (現役主力)
+        "gemini-1.5-flash",    // 速度快 (候補 1)
+        "gemini-1.0-pro",      // 舊版穩定 (候補 2)
+        "gemini-pro"           // 舊版代號 (候補 3)
+    ];
 
     try {
         const bad = currentPKContext.bad;
@@ -436,28 +447,51 @@ async function callGeminiChat(userMessage) {
             請用繁體中文回答，不使用 Emoji。
         `;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        
-        const data = await response.json();
-        
+        let successData = null;
+        let lastError = null;
+
+        // --- 自動輪詢迴圈：一個一個試 ---
+        for (const model of modelsToTry) {
+            try {
+                // console.log(`Trying model: ${model}...`);
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.candidates && data.candidates[0].content) {
+                        successData = data;
+                        break; // 成功了！跳出迴圈
+                    }
+                } else {
+                    // 如果失敗 (例如 404)，就記錄錯誤並繼續試下一個
+                    const errText = await response.text();
+                    lastError = `Model ${model} error: ${response.status}`;
+                }
+            } catch (err) {
+                lastError = err.message;
+            }
+        }
+
         const loadingEl = document.getElementById(loadingId);
         if(loadingEl) loadingEl.remove();
 
-        if (data.candidates && data.candidates[0].content) {
-            const aiText = data.candidates[0].content.parts[0].text;
+        if (successData) {
+            const aiText = successData.candidates[0].content.parts[0].text;
             addChatMessage('ai', aiText);
         } else {
-            addChatMessage('system', "AI 暫時無法回應。");
+            console.error("All models failed. Last error:", lastError);
+            addChatMessage('system', "AI 暫時無法回應 (所有模型皆忙碌或 Key 無效)。");
         }
+
     } catch (e) {
         console.error(e);
         const loadingEl = document.getElementById(loadingId);
         if(loadingEl) loadingEl.remove();
-        addChatMessage('system', "連線錯誤。");
+        addChatMessage('system', "連線發生嚴重錯誤。");
     }
 }
 
