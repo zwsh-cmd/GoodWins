@@ -4,6 +4,230 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GoodWins</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* --- 基礎色調 --- */
+            --bg-body: #E0E0E0;            /* 電腦背景深灰 */
+            --bg-app: #FDFBF7;             /* APP 背景：米白/燕麥色 */
+            --card-bg: #FFFFFF;
+            
+            --text-main: #5A5A5A;          /* 暖深灰 */
+            --text-sub: #9C9C9C;           /* 淺灰 */
+            
+            /* --- 妳喜歡的配色回歸 --- */
+            /* 好事代表色：鼠尾草綠 */
+            --good-light: #E8F3E8;
+            --good-icon: #7FB07F;
+            
+            /* 鳥事代表色：乾燥玫瑰粉 */
+            --bad-light: #F9E8E8;
+            --bad-icon: #D48888;
+            
+            /* 主要按鈕色：暖灰藍 */
+            --primary: #76899E;
+            
+            --radius: 16px;                /* 適中的圓角 */
+            --shadow: 0 4px 12px rgba(0,0,0,0.05); /* 柔和陰影 */
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Nunito', 'Noto Sans TC', sans-serif;
+            background-color: var(--bg-body);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* --- 手機容器 (極簡方塊，無瀏海) --- */
+        #mobile-wrapper {
+            width: 100%;
+            max-width: 420px;
+            height: 100%;
+            max-height: 850px;
+            background-color: var(--bg-app);
+            position: relative;
+            box-shadow: 0 0 30px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .hidden { display: none !important; }
+
+        /* 通用按鈕 */
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: transform 0.1s;
+        }
+        .btn:active { transform: scale(0.98); opacity: 0.9; }
+
+        /* --- 登入畫面 --- */
+        #login-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+        .app-logo {
+            font-size: 28px; font-weight: 800; color: var(--primary);
+            margin-bottom: 40px; letter-spacing: 1px;
+        }
+
+        /* --- 主畫面 --- */
+        #app-screen { flex: 1; display: flex; flex-direction: column; height: 100%; }
+
+        header {
+            padding: 20px 24px;
+            display: flex; justify-content: space-between; align-items: center;
+            background: transparent;
+        }
+        .header-title { font-size: 20px; font-weight: 800; color: var(--text-main); }
+        
+        .icon-btn { 
+            background: none; border: none; padding: 8px; cursor: pointer; color: var(--text-main);
+            display: flex; align-items: center; justify-content: center;
+        }
+        /* 齒輪圖示大小 */
+        .icon-btn svg { width: 24px; height: 24px; fill: var(--text-main); }
+
+        main { flex: 1; overflow-y: auto; padding: 10px 24px; }
+
+        /* --- 卡片樣式 (回歸暖色系) --- */
+        .card-container { display: flex; flex-direction: column; gap: 16px; }
+
+        .action-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 24px;
+            display: flex; align-items: center; gap: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0,0,0,0.02);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .action-card:active { transform: scale(0.98); }
+
+        /* 圖示圓底 */
+        .icon-circle {
+            width: 56px; height: 56px;
+            border-radius: 18px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .icon-svg { width: 28px; height: 28px; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+        /* 鳥事配色 */
+        .card-bad .icon-circle { background-color: var(--bad-light); }
+        .card-bad .icon-svg { stroke: var(--bad-icon); }
+        
+        /* 好事配色 */
+        .card-good .icon-circle { background-color: var(--good-light); }
+        .card-good .icon-svg { stroke: var(--good-icon); }
+
+        .card-text h3 { margin: 0 0 4px 0; font-size: 17px; font-weight: 700; color: var(--text-main); }
+        .card-text p { margin: 0; font-size: 13px; color: var(--text-sub); }
+
+        /* --- API Modal --- */
+        #api-modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255, 0.95);
+            display: flex; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-content {
+            background: #FFF; width: 85%; padding: 30px;
+            border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .input-field {
+            width: 100%; padding: 14px; margin: 20px 0;
+            border: 2px solid #EEE; border-radius: 12px;
+            background: #FAFAFA; text-align: center; outline: none; font-size: 14px;
+        }
+        .input-field:focus { border-color: var(--primary); background: #FFF; }
+    </style>
+</head>
+<body>
+
+    <div id="mobile-wrapper">
+        <div id="login-screen">
+            <div class="app-logo">GoodWins</div>
+            <button id="btn-login" class="btn">
+                Google 登入
+            </button>
+        </div>
+
+        <div id="app-screen" class="hidden">
+            <header>
+                <div class="header-title">GoodWins</div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="btn-search" class="icon-btn">
+                        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                    </button>
+                    <button id="btn-settings" class="icon-btn">
+                        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84a.484.484 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 0 0-.59.22L2.05 8.83a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.27.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.57 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <main>
+                <div class="card-container">
+                    <div class="action-card card-bad" onclick="alert('開啟 PK 編輯器')">
+                        <div class="icon-circle">
+                            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                        </div>
+                        <div class="card-text">
+                            <h3>PK 鳥事</h3>
+                            <p>轉化負面情緒</p>
+                        </div>
+                    </div>
+
+                    <div class="action-card card-good" onclick="alert('開啟好事編輯器')">
+                        <div class="icon-circle">
+                            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                        </div>
+                        <div class="card-text">
+                            <h3>記錄好事</h3>
+                            <p>收藏生活微光</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <div id="api-modal" class="hidden">
+            <div class="modal-content">
+                <h3 style="margin-bottom: 8px; font-weight:700;">啟動 AI 金鑰</h3>
+                <p style="font-size:13px; color:#888;">請輸入 Gemini API Key</p>
+                <input type="password" id="input-api-key" class="input-field" placeholder="Paste Key Here">
+                <button id="btn-save-key" class="btn">確認啟動</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="main.js"></script>
+</body>
+</html><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GoodWins</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
         :root {
