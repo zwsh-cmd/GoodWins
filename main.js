@@ -1,7 +1,7 @@
 // --- 1. 引入 Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 // --- 2. 設定碼 ---
 const firebaseConfig = {
@@ -85,6 +85,61 @@ function createEditorHTML() {
 // 馬上執行，把畫面畫出來
 createEditorHTML();
 
+// --- 新增：動態生成 PK 畫面 ---
+function createPKScreenHTML() {
+    if (document.getElementById('pk-screen')) return;
+
+    const pkHTML = `
+    <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
+        <header style="padding: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #EEE;">
+            <div style="font-size: 20px; font-weight: 800; color: var(--text-main);">PK 擂台</div>
+            <button id="btn-exit-pk" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">離開</button>
+        </header>
+
+        <main style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 24px;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="action-card card-bad" style="cursor: default; padding: 20px; border: 2px solid var(--bad-icon);">
+                    <div class="icon-circle" style="width: 40px; height: 40px;">
+                        <svg class="icon-svg" viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                    </div>
+                    <div class="card-text">
+                        <h3 id="pk-bad-title" style="margin-bottom: 6px; font-size: 16px;">(鳥事標題)</h3>
+                        <p id="pk-bad-content" style="font-size: 13px; color: var(--text-main); opacity: 0.8;">(內容...)</p>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; font-weight: 900; color: #DDD; font-size: 14px;">⚡ VS ⚡</div>
+
+                <div class="action-card card-good" style="cursor: default; padding: 20px; border: 2px solid var(--good-icon);">
+                    <div class="icon-circle" style="width: 40px; height: 40px;">
+                        <svg class="icon-svg" viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                    </div>
+                    <div class="card-text">
+                        <h3 id="pk-good-title" style="margin-bottom: 6px; font-size: 16px;">(好事標題)</h3>
+                        <p id="pk-good-content" style="font-size: 13px; color: var(--text-main); opacity: 0.8;">(內容...)</p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: #FFF; border-radius: 16px; padding: 20px; box-shadow: var(--shadow); border: 1px solid #EEE;">
+                <div style="font-weight: 700; color: var(--primary); margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                    <span>🤖 AI 裁判講評</span>
+                </div>
+                <p id="pk-ai-comment" style="font-size: 15px; color: var(--text-main); line-height: 1.6;">
+                    正在搜尋適合的好事卡來對抗...<br>請稍候...
+                </p>
+            </div>
+        </main>
+    </div>
+    `;
+
+    const wrapper = document.getElementById('mobile-wrapper');
+    if(wrapper) {
+        wrapper.insertAdjacentHTML('beforeend', pkHTML);
+    }
+}
+createPKScreenHTML();
+
 
 // --- 5. 變數與 DOM 抓取 (介面產生後才能抓) ---
 let currentUser = null;
@@ -94,8 +149,17 @@ const screens = {
     login: document.getElementById('login-screen'),
     app: document.getElementById('app-screen'),
     apiModal: document.getElementById('api-modal'),
-    editor: document.getElementById('editor-modal')
+    editor: document.getElementById('editor-modal'),
+    pk: document.getElementById('pk-screen') // 新增
 };
+
+// 補上 PK 離開按鈕的監聽
+const btnExitPK = document.getElementById('btn-exit-pk');
+if(btnExitPK) {
+    btnExitPK.addEventListener('click', () => {
+        screens.pk.classList.add('hidden');
+    });
+}
 
 const inputs = {
     title: document.getElementById('input-title'),
@@ -169,6 +233,8 @@ btns.saveEdit.addEventListener('click', async () => {
 
     try {
         const collectionName = currentMode === 'good' ? 'good_things' : 'bad_things';
+        
+        // 1. 存入資料庫
         await addDoc(collection(db, collectionName), {
             uid: currentUser.uid,
             title: title,
@@ -177,13 +243,60 @@ btns.saveEdit.addEventListener('click', async () => {
             source: source,
             createdAt: serverTimestamp()
         });
-        alert("儲存成功！");
-        screens.editor.classList.add('hidden');
+
+        screens.editor.classList.add('hidden'); // 關閉編輯器
+
+        // 2. 如果是「鳥事」，進入 PK 環節
+        if (currentMode === 'bad') {
+            startPK({ title, content });
+        } else {
+            alert("好事已記錄！累積正能量 +1");
+        }
+
     } catch (e) {
         console.error("Error:", e);
         alert("儲存失敗：" + e.message);
     }
 });
+
+// --- PK 核心邏輯 ---
+async function startPK(badThing) {
+    // 1. 顯示 PK 畫面
+    screens.pk.classList.remove('hidden');
+    
+    // 2. 填入鳥事內容
+    document.getElementById('pk-bad-title').innerText = badThing.title;
+    document.getElementById('pk-bad-content').innerText = badThing.content;
+
+    // 3. 尋找一張好事卡 (這裡先簡單抓最新的一張，之後再接 AI)
+    const aiCommentEl = document.getElementById('pk-ai-comment');
+    aiCommentEl.innerText = "🔍 AI 正在翻找你的好事庫...";
+    
+    try {
+        // 從 good_things 隨機(或最新)抓一張
+        const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            const goodThing = querySnapshot.docs[0].data();
+            
+            // 填入好事內容
+            document.getElementById('pk-good-title').innerText = goodThing.title;
+            document.getElementById('pk-good-content').innerText = goodThing.content;
+            
+            aiCommentEl.innerText = `找到了一件好事來對抗！\n\n雖然發生了「${badThing.title}」，但別忘了你也曾經「${goodThing.title}」。\n這世界還是很美好的！`;
+        } else {
+            // 如果沒好事
+            document.getElementById('pk-good-title').innerText = "尚無好事";
+            document.getElementById('pk-good-content').innerText = "趕快去記錄一件好事，再來 PK 吧！";
+            aiCommentEl.innerText = "你的彈藥庫空空的！快去記錄好事來支援！";
+        }
+
+    } catch (e) {
+        console.error("PK Error:", e);
+        aiCommentEl.innerText = "AI 連線有點問題，但別擔心，好事總會發生的。";
+    }
+}
 
 // API Key 相關
 function checkApiKey() {
