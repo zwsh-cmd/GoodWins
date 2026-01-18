@@ -87,51 +87,78 @@ function createEditorHTML() {
 // 馬上執行，把畫面畫出來
 createEditorHTML();
 
-// --- 新增：動態生成 PK 畫面 (左右對決 + 聊天室版) ---
+// --- 新增：通用提示視窗元件 (取代原生 alert) ---
+function createGlobalComponents() {
+    if (document.getElementById('system-alert')) return;
+
+    const alertHTML = `
+    <div id="system-alert" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+        <div style="background: #FFF; width: 80%; max-width: 300px; padding: 24px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; display: flex; flex-direction: column; gap: 16px;">
+            <div id="alert-msg" style="font-size: 15px; color: var(--text-main); line-height: 1.6; white-space: pre-line;"></div>
+            <button id="btn-alert-ok" style="background: var(--primary); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; width: 100%;">我知道了</button>
+        </div>
+    </div>
+    `;
+    const wrapper = document.getElementById('mobile-wrapper');
+    if(wrapper) wrapper.insertAdjacentHTML('beforeend', alertHTML);
+
+    document.getElementById('btn-alert-ok').addEventListener('click', () => {
+        document.getElementById('system-alert').classList.add('hidden');
+    });
+}
+createGlobalComponents(); // 馬上建立
+
+// 封裝顯示函式 (之後都呼叫這個)
+function showSystemMessage(msg) {
+    const alertEl = document.getElementById('system-alert');
+    const msgEl = document.getElementById('alert-msg');
+    if(alertEl && msgEl) {
+        msgEl.innerText = msg;
+        alertEl.classList.remove('hidden');
+    } else {
+        alert(msg); // 備用
+    }
+}
+
+// --- 新增：動態生成 PK 畫面 (樣式優化版) ---
 function createPKScreenHTML() {
     if (document.getElementById('pk-screen')) return;
 
+    // 我們透過統一的 padding (20px) 來確保上下對齊
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
-        <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #EEE; background: #FFF;">
+        <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
             <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">PK 擂台</div>
             <button id="btn-exit-pk" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">離開</button>
         </header>
 
-        <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative;">
+        <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 15px;">
             
-            <div style="padding: 15px 15px 10px 15px; background: var(--bg-app); flex-shrink: 0;">
-                <div style="display: flex; gap: 10px;">
-                    <div class="action-card card-bad" style="flex: 1; cursor: default; padding: 15px; border: 2px solid var(--bad-icon); flex-direction: column; align-items: flex-start; gap: 10px; margin: 0;">
-                        <div style="display:flex; align-items:center; gap:8px; color: var(--bad-icon); font-size: 12px; font-weight: 700;">
-                             鳥事
-                        </div>
-                        <div class="card-text" style="width: 100%;">
-                            <h3 id="pk-bad-title" style="margin-bottom: 4px; font-size: 15px; line-height: 1.3;">(標題)</h3>
-                            <p id="pk-bad-content" style="font-size: 12px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
-                        </div>
+            <div style="display: flex; align-items: stretch; gap: 10px; flex-shrink: 0;">
+                <div class="action-card" style="flex: 1; cursor: default; padding: 15px; background: var(--bad-light); border: 2px solid var(--bad-icon); border-radius: 16px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="color: var(--bad-icon); font-size: 12px; font-weight: 700;">鳥事</div>
+                    <div style="flex: 1;">
+                        <h3 id="pk-bad-title" style="margin: 0 0 4px 0; font-size: 15px; color: var(--text-main); line-height: 1.3;">(標題)</h3>
+                        <p id="pk-bad-content" style="margin: 0; font-size: 12px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
                     </div>
+                </div>
 
-                    <div class="action-card card-good" style="flex: 1; cursor: default; padding: 15px; border: 2px solid var(--good-icon); flex-direction: column; align-items: flex-start; gap: 10px; margin: 0;">
-                         <div style="display:flex; align-items:center; gap:8px; color: var(--good-icon); font-size: 12px; font-weight: 700;">
-                             好事
-                        </div>
-                        <div class="card-text" style="width: 100%;">
-                            <h3 id="pk-good-title" style="margin-bottom: 4px; font-size: 15px; line-height: 1.3;">(標題)</h3>
-                            <p id="pk-good-content" style="font-size: 12px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
-                        </div>
+                <div style="display: flex; align-items: center; justify-content: center; font-style: italic; font-weight: 900; color: #CCC; font-size: 20px;">PK</div>
+
+                <div class="action-card" style="flex: 1; cursor: default; padding: 15px; background: var(--good-light); border: 2px solid var(--good-icon); border-radius: 16px; display: flex; flex-direction: column; gap: 8px;">
+                     <div style="color: var(--good-icon); font-size: 12px; font-weight: 700;">好事</div>
+                     <div style="flex: 1;">
+                        <h3 id="pk-good-title" style="margin: 0 0 4px 0; font-size: 15px; color: var(--text-main); line-height: 1.3;">(標題)</h3>
+                        <p id="pk-good-content" style="margin: 0; font-size: 12px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
                     </div>
                 </div>
             </div>
 
-            <div style="flex: 1; background: #FFF; border-top-left-radius: 20px; border-top-right-radius: 20px; box-shadow: 0 -4px 20px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden;">
-                
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;">
-                    </div>
-
+            <div style="flex: 1; background: #FFF; border-radius: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02);">
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF;">
-                    <input id="chat-input" type="text" placeholder="跟 AI 討論這場 PK..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA;">
-                    <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                    <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main);">
+                    <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
                 </div>
@@ -235,7 +262,7 @@ btns.saveEdit.addEventListener('click', async () => {
     const source = inputs.source.value;
 
     if (!title || !content) {
-        alert("標題和內容都要寫喔！");
+        showSystemMessage("標題和內容都要寫喔！"); // 改用新提示窗
         return;
     }
 
@@ -246,8 +273,6 @@ btns.saveEdit.addEventListener('click', async () => {
     try {
         const collectionName = currentMode === 'good' ? 'good_things' : 'bad_things';
         
-        // --- 加上超時機制 (解決卡住問題) ---
-        // 如果 5 秒內資料庫沒回應，就報錯
         const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Timeout")), 5000)
         );
@@ -261,7 +286,6 @@ btns.saveEdit.addEventListener('click', async () => {
             createdAt: serverTimestamp()
         });
 
-        // 比賽誰先跑完
         await Promise.race([addDocPromise, timeoutPromise]);
 
         screens.editor.classList.add('hidden'); 
@@ -269,22 +293,20 @@ btns.saveEdit.addEventListener('click', async () => {
         if (currentMode === 'bad') {
             startPK({ title, content });
         } else {
-            alert("好事已記錄！累積正能量 +1");
+            showSystemMessage("✨ 好事已記錄！\n累積正能量 +1"); // 改用新提示窗
         }
 
     } catch (e) {
         console.error("Error:", e);
         
         let msg = "儲存失敗：" + e.message;
-        
-        // 針對卡住問題的具體建議
         if (e.message === "Timeout" || e.code === "unavailable") {
-            msg = "儲存逾時！看起來是「資料庫沒開」或「網路不通」。\n\n請務必去 Firebase Console -> Build -> Firestore Database，點擊 [Create Database] 建立資料庫！";
+            msg = "儲存逾時！\n看起來是「資料庫沒開」或「網路不通」。\n\n請去 Firebase Console 檢查。";
         } else if (e.message.includes("permission-denied")) {
              msg = "儲存失敗：權限不足。\n請檢查 Firebase Console 的 Rules 設定。";
         }
         
-        alert(msg);
+        showSystemMessage(msg); // 改用新提示窗
     } finally {
         btns.saveEdit.innerText = originalText;
         btns.saveEdit.disabled = false;
