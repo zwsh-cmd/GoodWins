@@ -87,6 +87,15 @@ function createEditorHTML() {
 // 馬上執行，把畫面畫出來
 createEditorHTML();
 
+// [新增] 將 Icon 插入主標題列 (APP名稱左邊)
+const mainHeaderTitle = document.querySelector('.header-title');
+if(mainHeaderTitle && !mainHeaderTitle.querySelector('img')) {
+    mainHeaderTitle.innerHTML = `
+        <img src="icon.png" style="width:28px; height:28px; border-radius:6px; margin-right:8px; vertical-align:text-bottom;">
+        ${mainHeaderTitle.innerText}
+    `;
+}
+
 // --- 新增：通用提示視窗元件 (取代原生 alert) ---
 function createGlobalComponents() {
     if (document.getElementById('system-alert')) return;
@@ -138,7 +147,7 @@ function createPKScreenHTML() {
             
             <div style="display: flex; align-items: stretch; gap: 15px; flex-shrink: 0;">
                 <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s;">
-                    <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事 (勝?)</div>
+                    <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
                     <div style="flex: 1;">
                         <h3 id="pk-bad-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4;">(標題)</h3>
                         <p id="pk-bad-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
@@ -146,7 +155,7 @@ function createPKScreenHTML() {
                 </div>
 
                 <div id="btn-pk-good" class="action-card" style="flex: 1; cursor: pointer; padding: 20px; background: var(--good-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s;">
-                     <div style="color: var(--good-icon); font-size: 13px; font-weight: 700;">好事 (勝?)</div>
+                     <div style="color: var(--good-icon); font-size: 13px; font-weight: 700;">好事</div>
                      <div style="flex: 1;">
                         <h3 id="pk-good-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4;">(標題)</h3>
                         <p id="pk-good-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
@@ -468,19 +477,27 @@ async function callGeminiChat(userMessage) {
         const good = currentPKContext.good;
         
         const prompt = `
-            我們正在進行一場「好事 vs 鳥事」的 PK。
-            【鳥事】：${bad ? bad.title + '-' + bad.content : '無'}
-            【好事】：${good ? good.title + '-' + good.content : '無'}
+            情境：使用者正在使用「GoodWins」APP，進行「好事 vs 鳥事」的 PK 對抗。
+            【鳥事 (Bad Thing)】：${bad ? bad.title + ' - ' + bad.content : '無'}
+            【好事 (Good Thing)】：${good ? good.title + ' - ' + good.content : '無'}
+            【使用者目前的訊息/情緒】：${userMessage}
+
+            角色設定：你不是高高在上的導師，也不是盲目灌雞湯的機器人。你是使用者身邊一位「理性、幽默且溫暖的朋友」。
             
-            使用者的訊息：${userMessage}
+            核心任務：
+            1. 【同理情緒】：先接住使用者的情緒（例如：遇到這種事真的很煩），不要一上來就說教。
+            2. 【理性說服】：運用理性客觀的角度，說明「為什麼這件好事的光明面，足以證明世界沒有那麼糟」。請參考以下「好事選擇邏輯」來論述：
+               - (如果兩件事性質相似)：強調「你看，雖然有那種鳥事，但同樣情境下也有這樣溫暖的好事發生，人性還是有光輝的。」
+               - (如果性質不同但等級相當)：強調「雖然鳥事很扣分，但這件好事的價值和快樂足以抵銷那份不愉快。」
+               - (如果是廣泛觀察)：強調「雖然鳥事存在，但從這件好事來看，善意其實更常態。」
+            3. - 要注意同一個對話框裡面對話的連貫性。比如有時候使用者想閒聊幾句，那就不要死板地回應他怎麼比較兩張卡片。
             
-            請扮演一位智慧的人生導師。
-            重點分析：為什麼這張「好事卡」的價值可以打敗「鳥事卡」。
-            限制：
-            1. 回應長度請控制在 200 字以內。
-            2. 講重點，不要廢話。
-            3. 如果理由很簡單，50字以內也沒問題。
-            請用繁體中文回答，不使用 Emoji。
+            語氣限制：
+            1. 【日常口語】：像跟朋友傳訊息一樣自然，不要文謅謅，不要用書面語。
+            2. 【禁止肉麻】：絕對不要叫使用者「親愛的」、「孩子」、「寶貝」等過度親密的稱呼。
+            3. 【理性不盲目】：不要只說「好事會贏」，要說出「為什麼贏」（例如：因為這代表了真實的善意）。
+            
+            回應長度：200字以內。
         `;
 
         let successData = null;
@@ -610,15 +627,17 @@ function openEditor(mode) {
 function createWarehouseHTML() {
     if (document.getElementById('warehouse-modal')) return;
 
+    // 修改：改為三個 Tab (勝利、好事、待PK)
     const warehouseHTML = `
     <div id="warehouse-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:200; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
             <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">卡片倉庫</div>
             <button id="btn-close-warehouse" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">關閉</button>
         </header>
-        <div style="padding: 10px 20px; display: flex; gap: 10px;">
-            <button id="tab-good" style="flex: 1; padding: 10px; border: none; border-radius: 10px; background: var(--good-light); color: var(--good-icon); font-weight: 700; cursor: pointer;">好事卡</button>
-            <button id="tab-bad" style="flex: 1; padding: 10px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer;">鳥事卡</button>
+        <div style="padding: 10px 20px; display: flex; gap: 8px; overflow-x: auto;">
+            <button id="tab-wins" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #FFD700; color: #FFF; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
+            <button id="tab-good" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">好事庫</button>
+            <button id="tab-bad" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">待PK鳥事</button>
         </div>
         <div id="warehouse-list" style="flex: 1; overflow-y: auto; padding: 0 20px 20px 20px; display: flex; flex-direction: column; gap: 10px;">
             <div style="text-align:center; color:#999; margin-top:50px;">載入中...</div>
@@ -629,11 +648,12 @@ function createWarehouseHTML() {
     const wrapper = document.getElementById('mobile-wrapper');
     if(wrapper) wrapper.insertAdjacentHTML('beforeend', warehouseHTML);
 
-    // 綁定倉庫內部按鈕
     document.getElementById('btn-close-warehouse').addEventListener('click', () => {
         document.getElementById('warehouse-modal').classList.add('hidden');
     });
 
+    // 綁定三個 Tab
+    document.getElementById('tab-wins').addEventListener('click', () => loadWarehouseData('wins'));
     document.getElementById('tab-good').addEventListener('click', () => loadWarehouseData('good'));
     document.getElementById('tab-bad').addEventListener('click', () => loadWarehouseData('bad'));
 }
@@ -641,57 +661,85 @@ function createWarehouseHTML() {
 // 建立倉庫 HTML
 createWarehouseHTML();
 
-// 綁定 PK 畫面的「倉庫」按鈕 (因為 HTML 是動態生成的，這裡要延遲綁定或確保元素存在)
-// 這裡我們利用事件委派，或是直接抓取 (因為 createPKScreenHTML 已經執行過)
+// 綁定主畫面的倉庫按鈕
 const btnOpenWarehouse = document.getElementById('btn-open-warehouse');
 if(btnOpenWarehouse) {
     btnOpenWarehouse.addEventListener('click', () => {
-        // 更新 screens 物件，確保抓得到新生成的 warehouse-modal
-        screens.warehouse = document.getElementById('warehouse-modal'); 
+        if (!screens.warehouse) screens.warehouse = document.getElementById('warehouse-modal'); 
         screens.warehouse.classList.remove('hidden');
-        loadWarehouseData('good'); // 預設載入好事
+        loadWarehouseData('good'); 
     });
 }
 
-// 載入倉庫資料
+// 載入倉庫資料 (支援三大類)
 async function loadWarehouseData(type) {
     const listEl = document.getElementById('warehouse-list');
+    const tabWins = document.getElementById('tab-wins');
     const tabGood = document.getElementById('tab-good');
     const tabBad = document.getElementById('tab-bad');
     
     listEl.innerHTML = '<div style="text-align:center; color:#999; margin-top:50px;">讀取中...</div>';
 
-    // 切換 Tab 樣式
-    if(type === 'good') {
-        tabGood.style.background = 'var(--good-light)'; tabGood.style.color = 'var(--good-icon)';
-        tabBad.style.background = '#EEE'; tabBad.style.color = '#999';
-    } else {
-        tabGood.style.background = '#EEE'; tabGood.style.color = '#999';
-        tabBad.style.background = 'var(--bad-light)'; tabBad.style.color = 'var(--bad-icon)';
+    // 重置所有 Tab 樣式
+    if(tabWins && tabGood && tabBad) {
+        [tabWins, tabGood, tabBad].forEach(btn => {
+            btn.style.background = '#EEE'; btn.style.color = '#999';
+        });
     }
 
-    const collectionName = type === 'good' ? 'good_things' : 'bad_things';
+    let collectionName = '';
+    let emptyMsg = '';
+
+    // 設定當前 Tab
+    if (type === 'wins') {
+        if(tabWins) { tabWins.style.background = '#FFD700'; tabWins.style.color = '#FFF'; } 
+        collectionName = 'pk_wins'; // 這是新的集合 (勝利紀錄)
+        emptyMsg = '還沒有勝利紀錄喔！<br>快去 PK 幾場吧！';
+    } else if (type === 'good') {
+        if(tabGood) { tabGood.style.background = 'var(--good-light)'; tabGood.style.color = 'var(--good-icon)'; }
+        collectionName = 'good_things';
+        emptyMsg = '好事庫空空的。<br>記得多記錄生活中的微光！';
+    } else {
+        if(tabBad) { tabBad.style.background = 'var(--bad-light)'; tabBad.style.color = 'var(--bad-icon)'; }
+        collectionName = 'bad_things';
+        emptyMsg = '太棒了！<br>目前沒有待處理的鳥事。';
+    }
 
     try {
-        // 抓取最近 20 筆
         const q = query(collection(db, collectionName), orderBy("createdAt", "desc"), limit(20));
         const querySnapshot = await getDocs(q);
         
-        listEl.innerHTML = ''; // 清空
+        listEl.innerHTML = ''; 
 
         if (querySnapshot.empty) {
-            listEl.innerHTML = '<div style="text-align:center; color:#CCC; margin-top:50px;">這裡空空的</div>';
+            listEl.innerHTML = `<div style="text-align:center; color:#CCC; margin-top:50px; line-height:1.6;">${emptyMsg}</div>`;
             return;
         }
 
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             const date = data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : '剛剛';
-            const cardColor = type === 'good' ? 'var(--good-light)' : 'var(--bad-light)';
-            const iconColor = type === 'good' ? 'var(--good-icon)' : 'var(--bad-icon)';
+            
+            // 根據類型決定卡片顏色與標籤
+            let cardBg = '#FFF';
+            let iconColor = '#999';
+            let labelText = '';
+            
+            if (type === 'good') { 
+                iconColor = 'var(--good-icon)'; 
+                labelText = `等級: ${data.score || 1}`;
+            }
+            else if (type === 'bad') { 
+                iconColor = 'var(--bad-icon)'; 
+                labelText = `等級: ${data.score || 1}`;
+            }
+            else { 
+                iconColor = '#FFD700'; 
+                labelText = '🏆 PK 勝利';
+            } 
 
             const cardHTML = `
-                <div style="background: #FFF; padding: 15px; border-radius: 12px; border: 1px solid #F0F0F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; gap: 10px;">
+                <div style="background: ${cardBg}; padding: 15px; border-radius: 12px; border: 1px solid #F0F0F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; gap: 10px;">
                     <div style="width: 4px; background: ${iconColor}; border-radius: 2px;"></div>
                     <div style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
@@ -700,7 +748,7 @@ async function loadWarehouseData(type) {
                         </div>
                         <div style="font-size: 13px; color: #666; line-height: 1.4;">${data.content}</div>
                         <div style="margin-top: 8px; font-size: 12px; color: ${iconColor}; font-weight: 700;">
-                            等級: ${data.score || 1}
+                            ${labelText}
                         </div>
                     </div>
                 </div>
