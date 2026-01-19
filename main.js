@@ -1,7 +1,7 @@
 // --- 1. 引入 Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 // --- 2. 設定碼 ---
 const firebaseConfig = {
@@ -137,16 +137,16 @@ function createPKScreenHTML() {
         <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 15px;">
             
             <div style="display: flex; align-items: stretch; gap: 15px; flex-shrink: 0;">
-                <div class="action-card" style="flex: 1; cursor: default; padding: 20px; background: var(--bad-light); border: none; border-radius: 20px; display: flex; flex-direction: column; gap: 8px;">
-                    <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
+                <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s;">
+                    <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事 (勝?)</div>
                     <div style="flex: 1;">
                         <h3 id="pk-bad-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4;">(標題)</h3>
                         <p id="pk-bad-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
                     </div>
                 </div>
 
-                <div class="action-card" style="flex: 1; cursor: default; padding: 20px; background: var(--good-light); border: none; border-radius: 20px; display: flex; flex-direction: column; gap: 8px;">
-                     <div style="color: var(--good-icon); font-size: 13px; font-weight: 700;">好事</div>
+                <div id="btn-pk-good" class="action-card" style="flex: 1; cursor: pointer; padding: 20px; background: var(--good-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s;">
+                     <div style="color: var(--good-icon); font-size: 13px; font-weight: 700;">好事 (勝?)</div>
                      <div style="flex: 1;">
                         <h3 id="pk-good-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4;">(標題)</h3>
                         <p id="pk-good-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
@@ -172,7 +172,7 @@ function createPKScreenHTML() {
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', pkHTML);
         
-        // --- 關鍵修復：在這裡直接綁定聊天按鈕，保證一定抓得到 ---
+        // --- 聊天按鈕綁定 ---
         const btnSend = document.getElementById('btn-send-chat');
         const inputChat = document.getElementById('chat-input');
         
@@ -189,6 +189,17 @@ function createPKScreenHTML() {
             inputChat.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') handleSend();
             });
+        }
+
+        // --- 新增：PK 勝負判定按鈕綁定 ---
+        const btnPkBad = document.getElementById('btn-pk-bad');
+        const btnPkGood = document.getElementById('btn-pk-good');
+
+        if(btnPkBad) {
+            btnPkBad.addEventListener('click', () => handlePKResult('bad'));
+        }
+        if(btnPkGood) {
+            btnPkGood.addEventListener('click', () => handlePKResult('good'));
         }
     }
 }
@@ -701,4 +712,109 @@ async function loadWarehouseData(type) {
         console.error("Load Error:", e);
         listEl.innerHTML = '<div style="text-align:center; color:red; margin-top:50px;">讀取失敗，請檢查網路</div>';
     }
+}
+
+// --- 9. PK 邏輯與積分系統 ---
+
+async function handlePKResult(winner) {
+    if (!currentUser) {
+        showSystemMessage("請先登入才能紀錄 PK 結果！");
+        return;
+    }
+
+    if (winner === 'bad') {
+        // --- 使用者選了鳥事 ---
+        addChatMessage('user', "還是覺得這件鳥事比較強... 😩");
+        addChatMessage('system', "AI 正在尋找更有力的好事來支援...");
+
+        // 1. 嘗試找出另一件好事 (這裡簡單實作：重新抓取前 10 筆隨機挑選)
+        try {
+            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(10));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+                // 排除當前顯示的好事，挑一張新的
+                const candidates = querySnapshot.docs.map(doc => doc.data())
+                    .filter(item => item.title !== currentPKContext.good?.title);
+                
+                if (candidates.length > 0) {
+                    const newGood = candidates[Math.floor(Math.random() * candidates.length)];
+                    currentPKContext.good = newGood;
+                    
+                    // 更新介面
+                    document.getElementById('pk-good-title').innerText = newGood.title;
+                    document.getElementById('pk-good-content').innerText = newGood.content;
+                    
+                    // 請 AI 重新說服
+                    const prompt = `使用者覺得鳥事贏了。請換個角度，用這件新的好事「${newGood.title}」來說服他，為什麼這件好事能戰勝那件鳥事？(100字以內)`;
+                    await callGeminiChat(prompt);
+                } else {
+                    addChatMessage('ai', "我找不到其他好事了... 但請相信，這件鳥事終究會過去的！");
+                }
+            }
+        } catch(e) {
+            console.error("Fetch new good thing error:", e);
+        }
+
+    } else {
+        // --- 使用者選了好事 (勝利！) ---
+        addChatMessage('user', "好事贏了！這點鳥事不算什麼！ ✨");
+        
+        // 1. 計算積分 (鳥事幾分就加幾分)
+        const scoreToAdd = currentPKContext.bad?.score || 1;
+        const newTotal = await updateUserScore(scoreToAdd);
+        const rankTitle = getRankTitle(newTotal);
+
+        // 2. 顯示勝利訊息
+        showSystemMessage(`🎉 PK 勝利！\n\n獲得積分：+${scoreToAdd}\n目前總分：${newTotal}\n當前稱號：${rankTitle}`);
+        
+        // 3. AI 恭喜
+        await callGeminiChat(`使用者選擇了好事，PK勝利！請給予簡短溫暖的恭喜。(50字以內)`);
+        
+        // (選擇性) 可以在這裡關閉 PK 視窗或清除 context
+    }
+}
+
+// 更新使用者積分
+async function updateUserScore(scoreToAdd) {
+    if (!currentUser) return 0;
+    
+    const userRef = doc(db, "users", currentUser.uid);
+    try {
+        const userSnap = await getDoc(userRef);
+        let currentScore = 0;
+        
+        if (userSnap.exists()) {
+            currentScore = userSnap.data().totalScore || 0;
+            await updateDoc(userRef, {
+                totalScore: currentScore + scoreToAdd,
+                lastActive: serverTimestamp()
+            });
+        } else {
+            // 如果是第一次，建立新資料
+            await setDoc(userRef, {
+                email: currentUser.email,
+                totalScore: scoreToAdd,
+                createdAt: serverTimestamp(),
+                lastActive: serverTimestamp()
+            });
+        }
+        return currentScore + scoreToAdd;
+    } catch (e) {
+        console.error("Update score error:", e);
+        return 0;
+    }
+}
+
+// 取得稱號
+function getRankTitle(score) {
+    if (score <= 50) return "農夫實習生";
+    if (score <= 100) return "狩獵冒險者";
+    if (score <= 150) return "鎧甲傭兵";
+    if (score <= 200) return "遊俠";
+    if (score <= 250) return "騎士";
+    if (score <= 300) return "大劍士";
+    if (score <= 400) return "神聖騎士";
+    if (score <= 500) return "巨龍獵人";
+    return "神之守望者";
 }
