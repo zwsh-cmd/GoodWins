@@ -1,7 +1,7 @@
 // --- 1. 引入 Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 // --- 2. 設定碼 ---
 const firebaseConfig = {
@@ -218,6 +218,7 @@ createPKScreenHTML();
 // --- 5. 變數與 DOM 抓取 (介面產生後才能抓) ---
 let currentUser = null;
 let currentMode = '';
+let editingId = null; // [新增] 用來記錄正在編輯的文件 ID
 
 const screens = {
     login: document.getElementById('login-screen'),
@@ -316,7 +317,7 @@ btns.cancelEdit.addEventListener('click', () => {
     screens.editor.classList.add('hidden');
 });
 
-// 儲存邏輯
+// 儲存邏輯 (支援新增與編輯)
 btns.saveEdit.addEventListener('click', async () => {
     const title = inputs.title.value.trim();
     const content = inputs.content.value.trim();
@@ -324,56 +325,61 @@ btns.saveEdit.addEventListener('click', async () => {
     const source = inputs.source.value;
 
     if (!title || !content) {
-        showSystemMessage("標題和內容都要寫喔！"); // 改用新提示窗
+        showSystemMessage("標題和內容都要寫喔！");
         return;
     }
 
     const originalText = btns.saveEdit.innerText;
-    btns.saveEdit.innerText = "儲存中...";
+    btns.saveEdit.innerText = "處理中...";
     btns.saveEdit.disabled = true;
 
     try {
         const collectionName = currentMode === 'good' ? 'good_things' : 'bad_things';
         
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Timeout")), 5000)
-        );
-
-        const addDocPromise = addDoc(collection(db, collectionName), {
-            uid: currentUser.uid,
-            title: title,
-            content: content,
-            score: score,
-            source: source,
-            createdAt: serverTimestamp()
-        });
-
-        await Promise.race([addDocPromise, timeoutPromise]);
+        if (editingId) {
+            // --- 編輯模式：更新舊資料 ---
+            const docRef = doc(db, collectionName, editingId);
+            await updateDoc(docRef, {
+                title: title,
+                content: content,
+                score: score,
+                source: source,
+                updatedAt: serverTimestamp()
+            });
+        } else {
+            // --- 新增模式：建立新資料 ---
+            await addDoc(collection(db, collectionName), {
+                uid: currentUser.uid,
+                title: title,
+                content: content,
+                score: score,
+                source: source,
+                createdAt: serverTimestamp()
+            });
+        }
 
         screens.editor.classList.add('hidden'); 
 
+        // 如果是鳥事，無論新增或編輯，都直接開始 PK
         if (currentMode === 'bad') {
             startPK({ title, content });
         } else {
-            showSystemMessage("✨ 好事已記錄！\n累積正能量 +1"); // 改用新提示窗
+            showSystemMessage("✨ 好事已儲存！");
+        }
+        
+        // 如果倉庫開著，重整列表
+        if (!screens.warehouse.classList.contains('hidden')) {
+            loadWarehouseData(currentMode);
         }
 
     } catch (e) {
         console.error("Error:", e);
-        
-        let msg = "儲存失敗：" + e.message;
-        if (e.message === "Timeout" || e.code === "unavailable") {
-            msg = "儲存逾時！\n看起來是「資料庫沒開」或「網路不通」。\n\n請去 Firebase Console 檢查。";
-        } else if (e.message.includes("permission-denied")) {
-             msg = "儲存失敗：權限不足。\n請檢查 Firebase Console 的 Rules 設定。";
-        }
-        
-        showSystemMessage(msg); // 改用新提示窗
+        showSystemMessage("儲存失敗：" + e.message);
     } finally {
         btns.saveEdit.innerText = originalText;
         btns.saveEdit.disabled = false;
     }
-});
+});;
 
 // 全域變數，紀錄當前 PK 的上下文，讓聊天時 AI 知道狀況
 let currentPKContext = { bad: null, good: null };
@@ -569,28 +575,36 @@ function showScreen(name) {
     if (name === 'app') screens.app.classList.remove('hidden');
 }
 
-function openEditor(mode) {
+function openEditor(mode, data = null) {
     currentMode = mode;
-    inputs.title.value = '';
-    inputs.content.value = '';
-    inputs.score.value = '1';
-    inputs.source.value = 'personal';
+    
+    // 如果有傳入 data，代表是編輯模式；否則為新增模式
+    if (data) {
+        editingId = data.id;
+        inputs.title.value = data.title;
+        inputs.content.value = data.content;
+        inputs.score.value = data.score;
+        inputs.source.value = data.source || 'personal';
+    } else {
+        editingId = null;
+        inputs.title.value = '';
+        inputs.content.value = '';
+        inputs.score.value = '1';
+        inputs.source.value = 'personal';
+    }
 
     const titleEl = document.getElementById('editor-title');
-    // 使用 ID 抓取 label (因為我們剛剛在 HTML 裡加了 ID)
     const scoreLabel = document.getElementById('label-score') || inputs.score.previousElementSibling;
     const scoreSelect = inputs.score;
 
+    // [修改] 設定按鈕文字
     if (mode === 'good') {
-        // --- 好事模式 ---
-        titleEl.innerText = "記錄一件好事";
+        btns.saveEdit.innerText = "儲存";
+        titleEl.innerText = editingId ? "編輯好事" : "記錄一件好事";
         titleEl.style.color = "var(--good-icon)";
         
-        // 設定提示詞
         inputs.title.placeholder = "標題 (例如：迷路時遇到好心人指路)";
         inputs.content.placeholder = "寫下發生的經過...";
-        
-        // 設定等級標籤
         if (scoreLabel) scoreLabel.innerText = "好事等級";
         
         scoreSelect.innerHTML = `
@@ -601,15 +615,12 @@ function openEditor(mode) {
             <option value="5">5分 - 神聖好事 (Divine)</option>
         `;
     } else {
-        // --- 鳥事模式 ---
-        titleEl.innerText = "記錄一件鳥事";
+        btns.saveEdit.innerText = "PK"; // [修改] 鳥事模式按鈕改為 PK
+        titleEl.innerText = editingId ? "編輯鳥事" : "記錄一件鳥事";
         titleEl.style.color = "var(--bad-icon)";
         
-        // 設定提示詞
         inputs.title.placeholder = "標題 (例如：商家服務態度不太好)";
         inputs.content.placeholder = "寫下發生的經過...";
-        
-        // 設定等級標籤
         if (scoreLabel) scoreLabel.innerText = "鳥事等級";
         
         scoreSelect.innerHTML = `
@@ -620,6 +631,10 @@ function openEditor(mode) {
             <option value="5">5分 - 魔王鳥事 (Monster)</option>
         `;
     }
+    
+    // 如果是編輯模式，還原下拉選單的值
+    if(data) inputs.score.value = data.score;
+
     screens.editor.classList.remove('hidden');
 }
 
@@ -627,7 +642,6 @@ function openEditor(mode) {
 function createWarehouseHTML() {
     if (document.getElementById('warehouse-modal')) return;
 
-    // 修改：改為三個 Tab (勝利、好事、待PK)
     const warehouseHTML = `
     <div id="warehouse-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:200; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -652,10 +666,48 @@ function createWarehouseHTML() {
         document.getElementById('warehouse-modal').classList.add('hidden');
     });
 
-    // 綁定三個 Tab
     document.getElementById('tab-wins').addEventListener('click', () => loadWarehouseData('wins'));
     document.getElementById('tab-good').addEventListener('click', () => loadWarehouseData('good'));
     document.getElementById('tab-bad').addEventListener('click', () => loadWarehouseData('bad'));
+
+    // [新增] 倉庫列表的事件監聽 (擊敗、編輯、刪除)
+    const listEl = document.getElementById('warehouse-list');
+    listEl.addEventListener('click', async (e) => {
+        const target = e.target;
+        const action = target.dataset.action;
+        const id = target.dataset.id;
+
+        if (!action || !id) return;
+        
+        try {
+            if (action === 'delete') {
+                if(confirm('確定要刪除這張卡片嗎？')) {
+                    const isBadTab = document.getElementById('tab-bad').style.color !== 'rgb(153, 153, 153)'; 
+                    const collectionName = isBadTab ? 'bad_things' : 'good_things';
+                    
+                    await deleteDoc(doc(db, collectionName, id));
+                    target.closest('.card-item').remove();
+                }
+            } else if (action === 'edit' || action === 'defeat') {
+                const docSnap = await getDoc(doc(db, 'bad_things', id));
+                if (docSnap.exists()) {
+                    const data = { id: docSnap.id, ...docSnap.data() };
+                    
+                    if (action === 'edit') {
+                        openEditor('bad', data);
+                    } else if (action === 'defeat') {
+                        document.getElementById('warehouse-modal').classList.add('hidden');
+                        startPK(data);
+                    }
+                } else {
+                    showSystemMessage("找不到資料，可能已被刪除。");
+                }
+            }
+        } catch(err) {
+            console.error("Action Error", err);
+            showSystemMessage("操作失敗：" + err.message);
+        }
+    });
 }
 
 // 建立倉庫 HTML
@@ -690,10 +742,9 @@ async function loadWarehouseData(type) {
     let collectionName = '';
     let emptyMsg = '';
 
-    // 設定當前 Tab
     if (type === 'wins') {
         if(tabWins) { tabWins.style.background = '#FFD700'; tabWins.style.color = '#FFF'; } 
-        collectionName = 'pk_wins'; // 這是新的集合 (勝利紀錄)
+        collectionName = 'pk_wins';
         emptyMsg = '還沒有勝利紀錄喔！<br>快去 PK 幾場吧！';
     } else if (type === 'good') {
         if(tabGood) { tabGood.style.background = 'var(--good-light)'; tabGood.style.color = 'var(--good-icon)'; }
@@ -718,12 +769,13 @@ async function loadWarehouseData(type) {
 
         querySnapshot.forEach((doc) => {
             const data = doc.data();
+            const docId = doc.id;
             const date = data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : '剛剛';
             
-            // 根據類型決定卡片顏色與標籤
             let cardBg = '#FFF';
             let iconColor = '#999';
             let labelText = '';
+            let actionButtonsHTML = '';
             
             if (type === 'good') { 
                 iconColor = 'var(--good-icon)'; 
@@ -732,6 +784,15 @@ async function loadWarehouseData(type) {
             else if (type === 'bad') { 
                 iconColor = 'var(--bad-icon)'; 
                 labelText = `等級: ${data.score || 1}`;
+                
+                // [新增] 待PK鳥事的專屬按鈕
+                actionButtonsHTML = `
+                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px;">
+                        <button data-action="defeat" data-id="${docId}" style="flex:1; background:var(--primary); color:#FFF; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">擊敗它</button>
+                        <button data-action="edit" data-id="${docId}" style="flex:1; background:#EEE; color:#666; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">寫筆記</button>
+                        <button data-action="delete" data-id="${docId}" style="flex:1; background:#FFEBEE; color:var(--bad-icon); border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">垃圾桶</button>
+                    </div>
+                `;
             }
             else { 
                 iconColor = '#FFD700'; 
@@ -739,7 +800,7 @@ async function loadWarehouseData(type) {
             } 
 
             const cardHTML = `
-                <div style="background: ${cardBg}; padding: 15px; border-radius: 12px; border: 1px solid #F0F0F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; gap: 10px;">
+                <div class="card-item" style="background: ${cardBg}; padding: 15px; border-radius: 12px; border: 1px solid #F0F0F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; gap: 10px;">
                     <div style="width: 4px; background: ${iconColor}; border-radius: 2px;"></div>
                     <div style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
@@ -750,6 +811,7 @@ async function loadWarehouseData(type) {
                         <div style="margin-top: 8px; font-size: 12px; color: ${iconColor}; font-weight: 700;">
                             ${labelText}
                         </div>
+                        ${actionButtonsHTML}
                     </div>
                 </div>
             `;
@@ -775,13 +837,11 @@ async function handlePKResult(winner) {
         addChatMessage('user', "還是覺得這件鳥事比較強... 😩");
         addChatMessage('system', "AI 正在尋找更有力的好事來支援...");
 
-        // 1. 嘗試找出另一件好事 (這裡簡單實作：重新抓取前 10 筆隨機挑選)
         try {
             const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(10));
             const querySnapshot = await getDocs(q);
             
             if (!querySnapshot.empty) {
-                // 排除當前顯示的好事，挑一張新的
                 const candidates = querySnapshot.docs.map(doc => doc.data())
                     .filter(item => item.title !== currentPKContext.good?.title);
                 
@@ -789,11 +849,9 @@ async function handlePKResult(winner) {
                     const newGood = candidates[Math.floor(Math.random() * candidates.length)];
                     currentPKContext.good = newGood;
                     
-                    // 更新介面
                     document.getElementById('pk-good-title').innerText = newGood.title;
                     document.getElementById('pk-good-content').innerText = newGood.content;
                     
-                    // 請 AI 重新說服
                     const prompt = `使用者覺得鳥事贏了。請換個角度，用這件新的好事「${newGood.title}」來說服他，為什麼這件好事能戰勝那件鳥事？(100字以內)`;
                     await callGeminiChat(prompt);
                 } else {
@@ -808,18 +866,31 @@ async function handlePKResult(winner) {
         // --- 使用者選了好事 (勝利！) ---
         addChatMessage('user', "好事贏了！這點鳥事不算什麼！ ✨");
         
-        // 1. 計算積分 (鳥事幾分就加幾分)
+        // 1. 計算積分
         const scoreToAdd = currentPKContext.bad?.score || 1;
         const newTotal = await updateUserScore(scoreToAdd);
         const rankTitle = getRankTitle(newTotal);
 
-        // 2. 顯示勝利訊息
-        showSystemMessage(`🎉 PK 勝利！\n\n獲得積分：+${scoreToAdd}\n目前總分：${newTotal}\n當前稱號：${rankTitle}`);
+        // 2. 寫入勝利紀錄 (這就是妳要的：存檔功能)
+        try {
+            await addDoc(collection(db, "pk_wins"), {
+                uid: currentUser.uid,
+                badTitle: currentPKContext.bad?.title || "未知鳥事",
+                goodTitle: currentPKContext.good?.title || "未知好事",
+                score: scoreToAdd,
+                createdAt: serverTimestamp()
+            });
+            console.log("勝利已記錄！");
+        } catch(e) {
+            console.error("Save Win Error", e);
+            showSystemMessage("勝利紀錄儲存失敗：" + e.message);
+        }
+
+        // 3. 顯示勝利訊息
+        showSystemMessage(`🎉 PK 勝利！\n\n已存入勝利庫\n獲得積分：+${scoreToAdd}\n目前總分：${newTotal}\n當前稱號：${rankTitle}`);
         
-        // 3. AI 恭喜
+        // 4. AI 恭喜
         await callGeminiChat(`使用者選擇了好事，PK勝利！請給予簡短溫暖的恭喜。(50字以內)`);
-        
-        // (選擇性) 可以在這裡關閉 PK 視窗或清除 context
     }
 }
 
