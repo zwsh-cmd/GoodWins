@@ -8,28 +8,30 @@
     <link rel="manifest" href="manifest.json">
     <style>
         :root {
-            /* --- 基礎色調 --- */
+            /* --- 莫蘭迪質感配色 --- */
             --bg-body: #E0E0E0;            /* 電腦背景深灰 */
-            --bg-app: #FDFBF7;             /* APP 背景：米白/燕麥色 */
-            --card-bg: #FFFFFF;
+            --bg-app: #D8C8C5;             /* APP 背景：乾燥玫瑰灰 (來自 ICON 背景) */
+            --card-bg: #FFFFFF;            /* 卡片背景：維持純白以利閱讀 */
             
-            --text-main: #5A5A5A;          /* 暖深灰 */
-            --text-sub: #9C9C9C;           /* 淺灰 */
+            --text-main: #5A5A5A;          /* 文字：暖深灰 */
+            --text-sub: #888888;           /* 副文字：稍深一點的灰 */
             
-            /* --- 妳喜歡的配色回歸 --- */
-            /* 好事代表色：鼠尾草綠 */
-            --good-light: #E8F3E8;
-            --good-icon: #7FB07F;
+            /* --- 好事配色 (淺色卡片風格) --- */
+            /* 背景用米白，圖示用深灰褐來對比 */
+            --good-light: #F5F0EB;         /* 來自 ICON 淺色卡片 */
+            --good-icon: #9E8E8E;          
             
-            /* 鳥事代表色：乾燥玫瑰粉 */
-            --bad-light: #F9E8E8;
-            --bad-icon: #D48888;
+            /* --- 鳥事配色 (深色卡片風格) --- */
+            /* 背景用深灰褐，圖示用米白來對比 */
+            --bad-light: #9E8E8E;          /* 來自 ICON 深色卡片 */
+            --bad-icon: #F5F0EB;           
             
-            /* 主要按鈕色：暖灰藍 */
-            --primary: #76899E;
+            /* --- 主要按鈕色 --- */
+            /* 使用深灰褐，讓按鈕在玫瑰灰背景上更顯眼且協調 */
+            --primary: #9E8E8E;
             
-            --radius: 16px;                /* 適中的圓角 */
-            --shadow: 0 4px 12px rgba(0,0,0,0.05); /* 柔和陰影 */
+            --radius: 16px;
+            --shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
