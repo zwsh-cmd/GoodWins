@@ -30,17 +30,14 @@ function createEditorHTML() {
         border-radius:12px; 
         background:#FAFAFA url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235A5A5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 16px center; 
         background-size: 16px;
-        font-size:15px; 
+        font-size:16px; 
         color:var(--text-main); 
         outline:none; 
         -webkit-appearance: none; 
         appearance: none;
     `;
 
-    // 修改重點：
-    // 1. label 改為「好事等級」
-    // 2. input 加上 placeholder
-    // 3. 加上 autocomplete="off" 避免瀏覽器跳出歷史選單
+    // [修改] 加大輸入框字體
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
@@ -50,13 +47,13 @@ function createEditorHTML() {
                 <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
             </div>
 
-            <input id="input-title" type="text" placeholder="輸入標題..." autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:20px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
+            <input id="input-title" type="text" placeholder="輸入標題..." autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
             
-            <textarea id="input-content" placeholder="輸入內容..." name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:16px; outline:none; resize:none; background:transparent; line-height:1.6; color:var(--text-main);"></textarea>
+            <textarea id="input-content" placeholder="輸入內容..." name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:var(--text-main);"></textarea>
             
             <div style="padding:20px 0;">
                 <div style="margin-bottom:15px;">
-                    <label id="label-score" style="font-size:12px; color:#999; display:block; margin-bottom:5px;">好事等級</label>
+                    <label id="label-score" style="font-size:13px; color:#999; display:block; margin-bottom:5px;">好事等級</label>
                     <select id="input-score" style="${selectStyle}">
                         <option value="1">1分 - 微好事 (Micro)</option>
                         <option value="2">2分 - 小好事 (Small)</option>
@@ -66,7 +63,7 @@ function createEditorHTML() {
                     </select>
                 </div>
                 <div>
-                    <label style="font-size:12px; color:#999; display:block; margin-bottom:5px;">來源</label>
+                    <label style="font-size:13px; color:#999; display:block; margin-bottom:5px;">來源</label>
                     <select id="input-source" style="${selectStyle}">
                         <option value="personal">個人經驗</option>
                         <option value="inference">推論觀察</option>
@@ -133,6 +130,7 @@ function showSystemMessage(msg) {
 function createPKScreenHTML() {
     if (document.getElementById('pk-screen')) return;
 
+    // [修改] 在好事卡和鳥事卡中間加入「重新PK」按鈕
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
@@ -145,13 +143,18 @@ function createPKScreenHTML() {
 
         <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 15px;">
             
-            <div style="display: flex; align-items: stretch; gap: 15px; flex-shrink: 0;">
+            <div style="display: flex; align-items: stretch; gap: 10px; flex-shrink: 0;">
                 <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s;">
                     <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
                     <div style="flex: 1;">
                         <h3 id="pk-bad-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4;">(標題)</h3>
                         <p id="pk-bad-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
                     </div>
+                </div>
+
+                <div id="btn-re-pk" style="width: 40px; display:none; flex-direction:column; justify-content:center; align-items:center; background:#EEE; border-radius:12px; cursor:pointer; gap:4px;">
+                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:none; stroke:#666; stroke-width:2;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    <span style="font-size:12px; font-weight:bold; color:#666; writing-mode: vertical-rl;">重來</span>
                 </div>
 
                 <div id="btn-pk-good" class="action-card" style="flex: 1; cursor: pointer; padding: 20px; background: var(--good-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s;">
@@ -210,6 +213,25 @@ function createPKScreenHTML() {
         }
         if(btnPkGood) {
             btnPkGood.addEventListener('click', () => handlePKResult('good'));
+        }
+
+        // --- 新增：重新 PK 按鈕綁定 ---
+        const btnRePK = document.getElementById('btn-re-pk');
+        if(btnRePK) {
+            btnRePK.addEventListener('click', async () => {
+                if(confirm("確定要重新 PK 嗎？\n這將會開啟一場新的對決，並重新選擇好事。")) {
+                    // 使用當前鳥事資訊重新開始 PK
+                    // 注意：此時 currentPKContext.bad 應該要有標題和內容
+                    if(currentPKContext.bad) {
+                        // 強制轉為 bad_things 模式，視為新的 PK
+                        await startPK({
+                            id: 'temp-' + Date.now(), // 臨時 ID，真正存檔時會產生新的或覆蓋
+                            title: currentPKContext.bad.title,
+                            content: currentPKContext.bad.content
+                        }, 'bad_things');
+                    }
+                }
+            });
         }
     }
 }
@@ -391,6 +413,8 @@ async function startPK(data, collectionSource) {
     const chatHistory = document.getElementById('chat-history');
     chatHistory.innerHTML = ''; // 先清空介面
 
+    const btnRePk = document.getElementById('btn-re-pk');
+
     // 設定上下文 (包含來源 collection，便於儲存對話)
     currentPKContext = {
         docId: data.id,
@@ -403,13 +427,15 @@ async function startPK(data, collectionSource) {
     // 判斷是「新/進行中的 PK」還是「已勝利的回顧」
     if (collectionSource === 'pk_wins') {
         // --- 勝利回顧模式 ---
+        if(btnRePk) btnRePk.style.display = 'flex'; // 顯示重新PK按鈕
+
         document.getElementById('pk-bad-title').innerText = data.badTitle;
-        document.getElementById('pk-bad-content').innerText = "(已克服的鳥事)";
+        document.getElementById('pk-bad-content').innerText = data.badContent || "(已克服的鳥事)";
         document.getElementById('pk-good-title').innerText = data.goodTitle;
-        document.getElementById('pk-good-content').innerText = "(獲勝的好事)";
+        document.getElementById('pk-good-content').innerText = data.goodContent || "(獲勝的好事)";
         
-        currentPKContext.bad = { title: data.badTitle, content: "(已克服)" };
-        currentPKContext.good = { title: data.goodTitle, content: "(獲勝)" };
+        currentPKContext.bad = { title: data.badTitle, content: data.badContent };
+        currentPKContext.good = { title: data.goodTitle, content: data.goodContent };
 
         // 渲染歷史對話
         if (currentPKContext.chatLogs.length > 0) {
@@ -420,6 +446,8 @@ async function startPK(data, collectionSource) {
         
     } else {
         // --- 進行中的 PK (鳥事) ---
+        if(btnRePk) btnRePk.style.display = 'none'; // 隱藏重新PK按鈕
+
         document.getElementById('pk-bad-title').innerText = data.title;
         document.getElementById('pk-bad-content').innerText = data.content;
         currentPKContext.bad = data;
@@ -431,7 +459,6 @@ async function startPK(data, collectionSource) {
         }
 
         // 只有當沒有 Good Thing (剛開始) 時，才去抓
-        // 為了簡單起見，這裡我們每次進入都重新抓最好的好事，除非已經有綁定 (未實作綁定，暫時隨機抓)
         try {
             const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(5)); // 抓前5個隨機
             const querySnapshot = await getDocs(q);
@@ -541,18 +568,19 @@ async function callGeminiChat(userMessage) {
             角色設定：你不是高高在上的導師，也不是盲目灌雞湯的機器人。你是使用者身邊一位「理性、幽默且溫暖的朋友」。
             
             核心任務 (請融合以下邏輯)：
-            1. 【同理情緒】：先接住使用者的情緒，不要一上來就說教。
+            1. 【同理情緒】：先接住使用者的情緒（例如：遇到這種事真的很煩），不要一上來就說教。
             2. 【脈絡意識】：請參考【之前的對話脈絡】，不要重複你已經說過的論點。如果使用者在閒聊，就自然回應。
-            3. 【理性說服與比較】：(這是你原本的擅長領域，請繼續保持)
-               - 若兩件事性質相似：強調「雖然有那種鳥事，但同樣情境下也有這樣溫暖的好事，人性還是有光輝的。」
-               - 若性質不同但等級相當：強調「雖然鳥事很扣分，但這件好事的價值和快樂足以抵銷那份不愉快。」
-               - 若是廣泛觀察：強調「雖然鳥事存在，但從這件好事來看，善意其實更常態。」
-            4. 【人性辯證 (升級層次)】：若使用者覺得鳥事很糟，代表他能感知「惡」。請引導他辯證：既然能敏銳感知惡，是否也能信任這張好事卡背後的「善」？如果因為鳥事而全盤否定好事，是否也否定了自己相信美好的能力？
+            3. 【理性說服】：運用理性客觀的角度，說明「為什麼這件好事的光明面，足以證明世界沒有那麼糟」。請參考以下「好事選擇邏輯」來論述：
+               - (如果兩件事性質相似)：強調「你看，雖然有那種鳥事，但同樣情境下也有這樣溫暖的好事發生，人性還是有光輝的。」
+               - (如果性質不同但等級相當)：強調「雖然鳥事很扣分，但這件好事的價值和快樂足以抵銷那份不愉快。」
+               - (如果是廣泛觀察)：強調「雖然鳥事存在，但從這件好事來看，善意其實更常態。」
+            4. 【人性辯證 (升級層次)】：如果使用者覺得這件事情很鳥，那表示使用者無法欣賞這件事情所引出的人性，那麼好事卡可以被使用者欣賞、信任嗎？請從這個點下去辯證。引導他思考：既然能敏銳感知惡，是否也能信任這張好事卡背後的「善」？如果因為鳥事而全盤否定好事，是否也否定了自己相信美好的能力？
 
-            語氣與限制：
-            1. 【日常口語】：像朋友傳訊息，不要文謅謅。
-            2. 【禁止肉麻】：絕對不要叫使用者「親愛的」、「孩子」、「寶貝」。
-            3. 【短促有力】：回應請嚴格限制在 **50字以內** (包含標點)。這點非常重要。
+            語氣限制：
+            1. 【日常口語】：像跟朋友傳訊息一樣自然，不要文謅謅，不要用書面語。
+            2. 【禁止肉麻】：絕對不要叫使用者「親愛的」、「孩子」、「寶貝」等過度親密的稱呼。
+            3. 【理性不盲目】：不要只說「好事會贏」，要說出「為什麼贏」（例如：因為這代表了真實的善意）。
+            4. 【短促有力】：回應請嚴格限制在 **100字以內** (包含標點)。這點非常重要。
         `;
 
         let successData = null;
@@ -580,7 +608,10 @@ async function callGeminiChat(userMessage) {
             const aiText = successData.candidates[0].content.parts[0].text;
             addChatMessage('ai', aiText);
         } else {
-            addChatMessage('system', "AI 暫時無法回應。");
+            // [修改] 勝利後即使 AI 暫時無法回應，也不要顯示錯誤訊息干擾心情
+            if (!userMessage.includes("勝利")) {
+                addChatMessage('system', "AI 暫時無法回應。");
+            }
         }
 
     } catch (e) {
@@ -823,12 +854,13 @@ async function loadWarehouseData(type) {
             let iconColor = '#999';
             let labelText = '';
             let actionButtonsHTML = '';
+            let displayTitle = data.title; // 預設使用 title
+            let displayContent = data.content; // 預設使用 content
             
             if (type === 'good') { 
                 iconColor = 'var(--good-icon)'; 
                 labelText = `等級: ${data.score || 1}`;
                 
-                // [修改] 好事庫增加「寫筆記」與「垃圾桶」
                 actionButtonsHTML = `
                     <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px;">
                         <button data-action="edit" data-id="${docId}" style="flex:1; background:#EEE; color:#666; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">寫筆記</button>
@@ -851,7 +883,10 @@ async function loadWarehouseData(type) {
             else { 
                 iconColor = '#FFD700'; 
                 labelText = '🏆 PK 勝利';
-                // [修改] 勝利庫增加「回顧」按鈕
+                // [修改] 勝利庫標題顯示邏輯
+                displayTitle = `擊敗「${data.badTitle}」`;
+                displayContent = `戰友：${data.goodTitle}`;
+
                 actionButtonsHTML = `
                     <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px;">
                         <button data-action="review" data-id="${docId}" style="flex:1; background:#FFF9C4; color:#FBC02D; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold;">回顧勝利</button>
@@ -864,10 +899,10 @@ async function loadWarehouseData(type) {
                     <div style="width: 4px; background: ${iconColor}; border-radius: 2px;"></div>
                     <div style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="font-weight: 700; color: var(--text-main); font-size: 15px;">${data.title}</span>
+                            <span style="font-weight: 700; color: var(--text-main); font-size: 15px;">${displayTitle}</span>
                             <span style="font-size: 12px; color: #BBB;">${date}</span>
                         </div>
-                        <div style="font-size: 13px; color: #666; line-height: 1.4;">${data.content}</div>
+                        <div style="font-size: 13px; color: #666; line-height: 1.4;">${displayContent}</div>
                         <div style="margin-top: 8px; font-size: 12px; color: ${iconColor}; font-weight: 700;">
                             ${labelText}
                         </div>
@@ -931,18 +966,20 @@ async function handlePKResult(winner) {
         const newTotal = await updateUserScore(scoreToAdd);
         const rankTitle = getRankTitle(newTotal);
 
-        // 2. 寫入勝利紀錄 (包含完整對話)
+        // 2. 寫入勝利紀錄 (修改：必須儲存完整 content 才能支援重新 PK)
         try {
             await addDoc(collection(db, "pk_wins"), {
                 uid: currentUser.uid,
                 badTitle: currentPKContext.bad?.title || "未知鳥事",
+                badContent: currentPKContext.bad?.content || "", // [新增]
                 goodTitle: currentPKContext.good?.title || "未知好事",
+                goodContent: currentPKContext.good?.content || "", // [新增]
                 score: scoreToAdd,
-                chatLogs: currentPKContext.chatLogs, // 儲存這場戰役的所有對話
+                chatLogs: currentPKContext.chatLogs, 
                 createdAt: serverTimestamp()
             });
             
-            // 順便刪除原本的鳥事 (因為已經解決了)
+            // [新增] 只有在「待PK鳥事庫」的才刪除，如果是從「勝利庫重新PK」則不刪
             if (currentPKContext.collection === 'bad_things') {
                 await deleteDoc(doc(db, "bad_things", currentPKContext.docId));
             }
@@ -956,8 +993,9 @@ async function handlePKResult(winner) {
         // 3. 顯示勝利訊息
         showSystemMessage(`🎉 PK 勝利！\n\n已存入勝利庫\n獲得積分：+${scoreToAdd}\n目前總分：${newTotal}\n當前稱號：${rankTitle}`);
         
-        // 4. AI 恭喜
-        await callGeminiChat(`使用者選擇了好事，PK勝利！請給予簡短溫暖的恭喜。(50字以內)`);
+        // 4. AI 恭喜 (確保 AI 知道這是勝利時刻)
+        // 傳送空字串給 addChatMessage 避免重複顯示，但讓它觸發 callGeminiChat
+        await callGeminiChat(`我贏了！我選擇了好事，成功擊敗了鳥事！請給我一個溫暖的恭喜。`);
     }
 }
 
