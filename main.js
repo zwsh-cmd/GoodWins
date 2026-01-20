@@ -1,7 +1,7 @@
 // --- 1. 引入 Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 // --- 2. 設定碼 ---
 const firebaseConfig = {
@@ -188,7 +188,8 @@ function createPKScreenHTML() {
         const handleSend = async () => {
             const text = inputChat.value.trim();
             if (!text) return;
-            addChatMessage('user', text);
+            // 呼叫新版 addChatMessage，會自動存入 DB
+            await addChatMessage('user', text);
             inputChat.value = '';
             await callGeminiChat(text);
         };
@@ -384,77 +385,123 @@ btns.saveEdit.addEventListener('click', async () => {
 // 全域變數，紀錄當前 PK 的上下文，讓聊天時 AI 知道狀況
 let currentPKContext = { bad: null, good: null };
 
-// --- PK 核心邏輯 (乾淨版) ---
-async function startPK(badThing) {
+// --- PK 核心邏輯 (保存對話版) ---
+async function startPK(data, collectionSource) {
     screens.pk.classList.remove('hidden');
-    document.getElementById('pk-bad-title').innerText = badThing.title;
-    document.getElementById('pk-bad-content').innerText = badThing.content;
-
-    // 清空聊天紀錄
     const chatHistory = document.getElementById('chat-history');
-    chatHistory.innerHTML = '';
-    
-    // 存入上下文
-    currentPKContext.bad = badThing;
-    
-    // 顯示純文字系統訊息
-    addChatMessage('system', "正在搜尋好事庫...");
+    chatHistory.innerHTML = ''; // 先清空介面
 
-    try {
-        const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1));
-        const querySnapshot = await getDocs(q);
+    // 設定上下文 (包含來源 collection，便於儲存對話)
+    currentPKContext = {
+        docId: data.id,
+        collection: collectionSource,
+        bad: null,
+        good: null,
+        chatLogs: data.chatLogs || [] // 載入歷史對話
+    };
 
-        if (!querySnapshot.empty) {
-            const goodThing = querySnapshot.docs[0].data();
-            currentPKContext.good = goodThing; 
-            
-            document.getElementById('pk-good-title').innerText = goodThing.title;
-            document.getElementById('pk-good-content').innerText = goodThing.content;
-            
-            callGeminiChat("請比較這兩件事，並用溫暖的語氣告訴我，為什麼這件好事的價值勝過那件鳥事？");
+    // 判斷是「新/進行中的 PK」還是「已勝利的回顧」
+    if (collectionSource === 'pk_wins') {
+        // --- 勝利回顧模式 ---
+        document.getElementById('pk-bad-title').innerText = data.badTitle;
+        document.getElementById('pk-bad-content').innerText = "(已克服的鳥事)";
+        document.getElementById('pk-good-title').innerText = data.goodTitle;
+        document.getElementById('pk-good-content').innerText = "(獲勝的好事)";
+        
+        currentPKContext.bad = { title: data.badTitle, content: "(已克服)" };
+        currentPKContext.good = { title: data.goodTitle, content: "(獲勝)" };
 
+        // 渲染歷史對話
+        if (currentPKContext.chatLogs.length > 0) {
+            currentPKContext.chatLogs.forEach(log => addChatMessage(log.role, log.text, false)); // false 表示不重複存檔
         } else {
-            document.getElementById('pk-good-title').innerText = "尚無好事";
-            document.getElementById('pk-good-content').innerText = "尚無資料";
-            addChatMessage('ai', "你的彈藥庫空空的！快去記錄一件好事，再來 PK 吧！");
+            addChatMessage('system', "此紀錄沒有對話存檔。");
+        }
+        
+    } else {
+        // --- 進行中的 PK (鳥事) ---
+        document.getElementById('pk-bad-title').innerText = data.title;
+        document.getElementById('pk-bad-content').innerText = data.content;
+        currentPKContext.bad = data;
+
+        // 渲染歷史對話
+        if (currentPKContext.chatLogs.length > 0) {
+            currentPKContext.chatLogs.forEach(log => addChatMessage(log.role, log.text, false));
+            // 如果有舊紀錄，就不自動發起新話題，除非這是剛開始
         }
 
-    } catch (e) {
-        console.error("PK Error:", e);
-        addChatMessage('system', "系統錯誤：請確認網路或資料庫連線。");
+        // 只有當沒有 Good Thing (剛開始) 時，才去抓
+        // 為了簡單起見，這裡我們每次進入都重新抓最好的好事，除非已經有綁定 (未實作綁定，暫時隨機抓)
+        try {
+            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(5)); // 抓前5個隨機
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                const docs = querySnapshot.docs;
+                const randomDoc = docs[Math.floor(Math.random() * docs.length)];
+                const goodThing = randomDoc.data();
+                
+                currentPKContext.good = goodThing;
+                document.getElementById('pk-good-title').innerText = goodThing.title;
+                document.getElementById('pk-good-content').innerText = goodThing.content;
+
+                // 如果完全沒有對話紀錄，才主動發起第一句話
+                if (currentPKContext.chatLogs.length === 0) {
+                    callGeminiChat("請比較這兩件事，並開啟話題。");
+                }
+            } else {
+                document.getElementById('pk-good-title').innerText = "尚無好事";
+                document.getElementById('pk-good-content').innerText = "去記錄點好事吧！";
+                addChatMessage('ai', "你的彈藥庫空空的！快去記錄一件好事，再來 PK 吧！");
+            }
+        } catch (e) {
+            console.error("PK Error:", e);
+            addChatMessage('system', "讀取好事失敗。");
+        }
     }
 }
 
 // --- 聊天功能模組 ---
 
-// 1. 在畫面上新增一條訊息 (風格一致版)
-function addChatMessage(sender, text) {
+// 1. 在畫面上新增訊息，並同步儲存到資料庫
+async function addChatMessage(sender, text, saveToDb = true) {
     const chatHistory = document.getElementById('chat-history');
     const msgDiv = document.createElement('div');
     
-    // 設定樣式
     if (sender === 'ai') {
-        // AI 訊息：淺灰底，無圖示，純文字
         msgDiv.style.cssText = "align-self: flex-start; background: #F7F7F7; padding: 14px 16px; border-radius: 16px 16px 16px 4px; font-size: 14px; color: var(--text-main); line-height: 1.6; max-width: 85%;";
         msgDiv.innerHTML = `<div style="font-weight:700; font-size:12px; color:#AAA; margin-bottom:4px;">AI</div>${text}`;
     } else if (sender === 'user') {
-        // 使用者訊息：主色調底，白字
         msgDiv.style.cssText = "align-self: flex-end; background: var(--primary); color: #FFF; padding: 12px 16px; border-radius: 16px 16px 4px 16px; font-size: 14px; line-height: 1.6; max-width: 85%; box-shadow: 0 2px 5px rgba(0,0,0,0.1);";
         msgDiv.innerText = text;
     } else { 
-        // 系統訊息：極簡灰字
         msgDiv.style.cssText = "align-self: center; padding: 8px; font-size: 12px; color: #BBB;";
         msgDiv.innerText = text;
     }
     
     chatHistory.appendChild(msgDiv);
-    // 自動捲動到底部
     chatHistory.scrollTop = chatHistory.scrollHeight; 
+
+    // 儲存到 Firestore
+    if (saveToDb && currentPKContext.docId && sender !== 'system') {
+        try {
+            const docRef = doc(db, currentPKContext.collection, currentPKContext.docId);
+            const newMessage = { role: sender, text: text, time: Date.now() };
+            
+            // 使用 arrayUnion 加入陣列
+            await updateDoc(docRef, {
+                chatLogs: arrayUnion(newMessage)
+            });
+            
+            // 更新本地上下文
+            currentPKContext.chatLogs.push(newMessage);
+        } catch (e) {
+            console.error("Save chat error:", e);
+        }
+    }
 }
 
-
-
-// 3. 呼叫 Gemini API (自動輪詢多個模型版本)
+// 3. 呼叫 Gemini API (包含對話記憶與完整 Prompt 邏輯)
 async function callGeminiChat(userMessage) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey) {
@@ -471,68 +518,59 @@ async function callGeminiChat(userMessage) {
     chatHistory.appendChild(loadingDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
 
-    // 定義要嘗試的模型清單 (精簡版：避免觸發 429 請求限制)
-    const modelsToTry = [
-        "gemini-2.5-flash",      // 最強大腦 (優先)
-        "gemini-1.5-flash",    // 速度快 (候補)
-        "gemini-1.0-pro"       // 穩定版 (保底)
-    ];
+    const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.0-pro"];
 
     try {
         const bad = currentPKContext.bad;
         const good = currentPKContext.good;
         
+        // 構建上下文歷史 (取最近 6 則)
+        const historyText = currentPKContext.chatLogs.slice(-6)
+            .map(log => `${log.role === 'user' ? '使用者' : '你'}: ${log.text}`)
+            .join('\n');
+
+        // [關鍵修改] 融合舊有詳細邏輯 + 新增的限制與辯證需求
         const prompt = `
             情境：使用者正在使用「GoodWins」APP，進行「好事 vs 鳥事」的 PK 對抗。
             【鳥事 (Bad Thing)】：${bad ? bad.title + ' - ' + bad.content : '無'}
             【好事 (Good Thing)】：${good ? good.title + ' - ' + good.content : '無'}
-            【使用者目前的訊息/情緒】：${userMessage}
+            【之前的對話脈絡】：
+            ${historyText}
+            【使用者目前的訊息】：${userMessage}
 
             角色設定：你不是高高在上的導師，也不是盲目灌雞湯的機器人。你是使用者身邊一位「理性、幽默且溫暖的朋友」。
             
-            核心任務：
-            1. 【同理情緒】：先接住使用者的情緒（例如：遇到這種事真的很煩），不要一上來就說教。
-            2. 【理性說服】：運用理性客觀的角度，說明「為什麼這件好事的光明面，足以證明世界沒有那麼糟」。請參考以下「好事選擇邏輯」來論述：
-               - (如果兩件事性質相似)：強調「你看，雖然有那種鳥事，但同樣情境下也有這樣溫暖的好事發生，人性還是有光輝的。」
-               - (如果性質不同但等級相當)：強調「雖然鳥事很扣分，但這件好事的價值和快樂足以抵銷那份不愉快。」
-               - (如果是廣泛觀察)：強調「雖然鳥事存在，但從這件好事來看，善意其實更常態。」
-            3. - 要注意同一個對話框裡面對話的連貫性。比如有時候使用者想閒聊幾句，那就不要死板地回應他怎麼比較兩張卡片。
-            
-            語氣限制：
-            1. 【日常口語】：像跟朋友傳訊息一樣自然，不要文謅謅，不要用書面語。
-            2. 【禁止肉麻】：絕對不要叫使用者「親愛的」、「孩子」、「寶貝」等過度親密的稱呼。
-            3. 【理性不盲目】：不要只說「好事會贏」，要說出「為什麼贏」（例如：因為這代表了真實的善意）。
-            
-            回應長度：200字以內。
+            核心任務 (請融合以下邏輯)：
+            1. 【同理情緒】：先接住使用者的情緒，不要一上來就說教。
+            2. 【脈絡意識】：請參考【之前的對話脈絡】，不要重複你已經說過的論點。如果使用者在閒聊，就自然回應。
+            3. 【理性說服與比較】：(這是你原本的擅長領域，請繼續保持)
+               - 若兩件事性質相似：強調「雖然有那種鳥事，但同樣情境下也有這樣溫暖的好事，人性還是有光輝的。」
+               - 若性質不同但等級相當：強調「雖然鳥事很扣分，但這件好事的價值和快樂足以抵銷那份不愉快。」
+               - 若是廣泛觀察：強調「雖然鳥事存在，但從這件好事來看，善意其實更常態。」
+            4. 【人性辯證 (升級層次)】：若使用者覺得鳥事很糟，代表他能感知「惡」。請引導他辯證：既然能敏銳感知惡，是否也能信任這張好事卡背後的「善」？如果因為鳥事而全盤否定好事，是否也否定了自己相信美好的能力？
+
+            語氣與限制：
+            1. 【日常口語】：像朋友傳訊息，不要文謅謅。
+            2. 【禁止肉麻】：絕對不要叫使用者「親愛的」、「孩子」、「寶貝」。
+            3. 【短促有力】：回應請嚴格限制在 **50字以內** (包含標點)。這點非常重要。
         `;
 
         let successData = null;
-        let lastError = null;
-
-        // --- 自動輪詢迴圈：一個一個試 ---
         for (const model of modelsToTry) {
             try {
-                // console.log(`Trying model: ${model}...`);
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                 });
-
                 if (response.ok) {
                     const data = await response.json();
                     if (data.candidates && data.candidates[0].content) {
                         successData = data;
-                        break; // 成功了！跳出迴圈
+                        break;
                     }
-                } else {
-                    // 如果失敗 (例如 404)，就記錄錯誤並繼續試下一個
-                    const errText = await response.text();
-                    lastError = `Model ${model} error: ${response.status}`;
                 }
-            } catch (err) {
-                lastError = err.message;
-            }
+            } catch (err) {}
         }
 
         const loadingEl = document.getElementById(loadingId);
@@ -542,15 +580,13 @@ async function callGeminiChat(userMessage) {
             const aiText = successData.candidates[0].content.parts[0].text;
             addChatMessage('ai', aiText);
         } else {
-            console.error("All models failed. Last error:", lastError);
-            addChatMessage('system', "AI 暫時無法回應 (所有模型皆忙碌或 Key 無效)。");
+            addChatMessage('system', "AI 暫時無法回應。");
         }
 
     } catch (e) {
-        console.error(e);
         const loadingEl = document.getElementById(loadingId);
         if(loadingEl) loadingEl.remove();
-        addChatMessage('system', "連線發生嚴重錯誤。");
+        addChatMessage('system', "連線錯誤。");
     }
 }
 
@@ -615,7 +651,7 @@ function openEditor(mode, data = null) {
             <option value="5">5分 - 神聖好事 (Divine)</option>
         `;
     } else {
-        btns.saveEdit.innerText = "PK"; // [修改] 鳥事模式按鈕改為 PK
+        btns.saveEdit.innerText = "儲存"; // [修改] 將 PK 改回 儲存 (由使用者決定何時去倉庫PK)
         titleEl.innerText = editingId ? "編輯鳥事" : "記錄一件鳥事";
         titleEl.style.color = "var(--bad-icon)";
         
@@ -670,7 +706,7 @@ function createWarehouseHTML() {
     document.getElementById('tab-good').addEventListener('click', () => loadWarehouseData('good'));
     document.getElementById('tab-bad').addEventListener('click', () => loadWarehouseData('bad'));
 
-    // [新增] 倉庫列表的事件監聽 (擊敗、編輯、刪除)
+    // [新增] 倉庫列表的事件監聽 (擊敗、編輯、刪除、回顧)
     const listEl = document.getElementById('warehouse-list');
     listEl.addEventListener('click', async (e) => {
         const target = e.target;
@@ -682,25 +718,36 @@ function createWarehouseHTML() {
         try {
             if (action === 'delete') {
                 if(confirm('確定要刪除這張卡片嗎？')) {
-                    const isBadTab = document.getElementById('tab-bad').style.color !== 'rgb(153, 153, 153)'; 
+                    // 簡單判斷當前 Tab
+                    const isBadTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)');
                     const collectionName = isBadTab ? 'bad_things' : 'good_things';
                     
                     await deleteDoc(doc(db, collectionName, id));
                     target.closest('.card-item').remove();
                 }
-            } else if (action === 'edit' || action === 'defeat') {
+            } else if (action === 'edit') {
+                // 判斷是編輯好事還是鳥事
+                const isGoodTab = document.getElementById('tab-good').style.background.includes('var(--good-light)');
+                const collectionName = isGoodTab ? 'good_things' : 'bad_things';
+                
+                const docSnap = await getDoc(doc(db, collectionName, id));
+                if (docSnap.exists()) {
+                    openEditor(isGoodTab ? 'good' : 'bad', { id: docSnap.id, ...docSnap.data() });
+                }
+            } else if (action === 'defeat') {
+                // 擊敗鳥事 (進入 PK)
                 const docSnap = await getDoc(doc(db, 'bad_things', id));
                 if (docSnap.exists()) {
-                    const data = { id: docSnap.id, ...docSnap.data() };
-                    
-                    if (action === 'edit') {
-                        openEditor('bad', data);
-                    } else if (action === 'defeat') {
-                        document.getElementById('warehouse-modal').classList.add('hidden');
-                        startPK(data);
-                    }
-                } else {
-                    showSystemMessage("找不到資料，可能已被刪除。");
+                    document.getElementById('warehouse-modal').classList.add('hidden');
+                    startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things');
+                }
+            } else if (action === 'review') {
+                // 回顧勝利 (唯讀 PK)
+                const docSnap = await getDoc(doc(db, 'pk_wins', id));
+                if (docSnap.exists()) {
+                    document.getElementById('warehouse-modal').classList.add('hidden');
+                    const winData = { id: docSnap.id, ...docSnap.data() };
+                    startPK(winData, 'pk_wins');
                 }
             }
         } catch(err) {
@@ -780,12 +827,19 @@ async function loadWarehouseData(type) {
             if (type === 'good') { 
                 iconColor = 'var(--good-icon)'; 
                 labelText = `等級: ${data.score || 1}`;
+                
+                // [修改] 好事庫增加「寫筆記」與「垃圾桶」
+                actionButtonsHTML = `
+                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px;">
+                        <button data-action="edit" data-id="${docId}" style="flex:1; background:#EEE; color:#666; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">寫筆記</button>
+                        <button data-action="delete" data-id="${docId}" style="flex:1; background:#FFEBEE; color:var(--bad-icon); border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">垃圾桶</button>
+                    </div>
+                `;
             }
             else if (type === 'bad') { 
                 iconColor = 'var(--bad-icon)'; 
                 labelText = `等級: ${data.score || 1}`;
                 
-                // [新增] 待PK鳥事的專屬按鈕
                 actionButtonsHTML = `
                     <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px;">
                         <button data-action="defeat" data-id="${docId}" style="flex:1; background:var(--primary); color:#FFF; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">擊敗它</button>
@@ -797,6 +851,12 @@ async function loadWarehouseData(type) {
             else { 
                 iconColor = '#FFD700'; 
                 labelText = '🏆 PK 勝利';
+                // [修改] 勝利庫增加「回顧」按鈕
+                actionButtonsHTML = `
+                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px;">
+                        <button data-action="review" data-id="${docId}" style="flex:1; background:#FFF9C4; color:#FBC02D; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold;">回顧勝利</button>
+                    </div>
+                `;
             } 
 
             const cardHTML = `
@@ -871,15 +931,22 @@ async function handlePKResult(winner) {
         const newTotal = await updateUserScore(scoreToAdd);
         const rankTitle = getRankTitle(newTotal);
 
-        // 2. 寫入勝利紀錄 (這就是妳要的：存檔功能)
+        // 2. 寫入勝利紀錄 (包含完整對話)
         try {
             await addDoc(collection(db, "pk_wins"), {
                 uid: currentUser.uid,
                 badTitle: currentPKContext.bad?.title || "未知鳥事",
                 goodTitle: currentPKContext.good?.title || "未知好事",
                 score: scoreToAdd,
+                chatLogs: currentPKContext.chatLogs, // 儲存這場戰役的所有對話
                 createdAt: serverTimestamp()
             });
+            
+            // 順便刪除原本的鳥事 (因為已經解決了)
+            if (currentPKContext.collection === 'bad_things') {
+                await deleteDoc(doc(db, "bad_things", currentPKContext.docId));
+            }
+            
             console.log("勝利已記錄！");
         } catch(e) {
             console.error("Save Win Error", e);
