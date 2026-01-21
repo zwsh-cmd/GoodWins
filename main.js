@@ -529,6 +529,45 @@ async function addChatMessage(sender, text, saveToDb = true) {
 }
 
 // 3. 呼叫 Gemini API (包含對話記憶與完整 Prompt 邏輯)
+// [新增] 動態取得目前 Google 帳號可用的最新 Gemini 模型
+let cachedModelId = null;
+
+async function getBestGeminiModel(apiKey) {
+    if (cachedModelId) return cachedModelId;
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        const data = await response.json();
+
+        if (!data.models) throw new Error("ListModels API returned no data");
+
+        // 篩選出 gemini 系列且支援 generateContent 的模型
+        const candidates = data.models.filter(m => 
+            m.name.includes("gemini") && 
+            m.supportedGenerationMethods.includes("generateContent")
+        );
+
+        // 排序：版本號大的優先 (例如 1.5 > 1.0)
+        candidates.sort((a, b) => {
+            const getVer = (name) => {
+                const match = name.match(/gemini-(\d+\.?\d*)/);
+                return match ? parseFloat(match[1]) : 0;
+            };
+            return getVer(b.name) - getVer(a.name);
+        });
+
+        if (candidates.length > 0) {
+            console.log("Auto-selected Model:", candidates[0].name);
+            cachedModelId = candidates[0].name.replace("models/", ""); 
+            return cachedModelId;
+        }
+
+    } catch (e) {
+        console.warn("Fetch models failed, using fallback.", e);
+    }
+    return "gemini-1.5-flash"; // 保底
+}
+
 async function callGeminiChat(userMessage) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey) {
@@ -545,24 +584,31 @@ async function callGeminiChat(userMessage) {
     chatHistory.appendChild(loadingDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
 
-    // 使用支援 System Instruction 的模型 (優先嘗試 2.5)
-    const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.0-pro"];
-
     try {
+        // 1. 自動取得最新模型
+        const modelName = await getBestGeminiModel(apiKey);
+
         const bad = currentPKContext.bad;
         const good = currentPKContext.good;
         const badText = bad ? `${bad.title} (內容: ${bad.content})` : "未知";
         const goodText = good ? `${good.title} (內容: ${good.content})` : "未知";
         
-        // 1. 轉換歷史紀錄 (將 GoodWins 的 'ai' 角色轉為 Gemini API 的 'model')
-        // 注意：addChatMessage 已經將最新的 userMessage 存入 currentPKContext.chatLogs，所以這裡直接用即可
-        let contents = currentPKContext.chatLogs.map(log => ({
-            role: log.role === 'ai' ? 'model' : 'user',
-            parts: [{ text: log.text }]
-        }));
+        // 2. 清洗對話紀錄 (避免連續 User 訊息導致 400 錯誤)
+        let contents = [];
+        let lastRole = null;
+        
+        currentPKContext.chatLogs.forEach(log => {
+            const role = log.role === 'ai' ? 'model' : 'user';
+            if (role === lastRole && role === 'user') {
+                // 如果連續兩則是使用者，合併到上一則
+                contents[contents.length - 1].parts[0].text += `\n(補充): ${log.text}`;
+            } else {
+                contents.push({ role: role, parts: [{ text: log.text }] });
+            }
+            lastRole = role;
+        });
 
-        // 2. 設定 System Instruction (核心策略)
-        // 透過 instruction 控制 AI 行為，達成「第一次說服，之後閒聊」的效果
+        // 3. 設定 System Instruction (完全保留原本 Prompt)
         const systemInstruction = `
         你現在是一位「理性、幽默且溫暖的朋友」，正在陪使用者玩「GoodWins」APP（好事 vs 鳥事 PK）。
         
@@ -586,45 +632,41 @@ async function callGeminiChat(userMessage) {
            - 保持簡短 (100字以內)。
         `;
 
-        let successData = null;
-        for (const model of modelsToTry) {
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: contents, // 傳送完整對話紀錄
-                        systemInstruction: {
-                            parts: [{ text: systemInstruction }] // 傳送人設與規則
-                        },
-                        generationConfig: {
-                            maxOutputTokens: 300, 
-                            temperature: 0.7
-                        }
-                    })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.candidates && data.candidates[0].content) {
-                        successData = data;
-                        break;
-                    }
+        // 4. 發送請求 (使用動態取得的 modelName)
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: contents, 
+                systemInstruction: {
+                    parts: [{ text: systemInstruction }] 
+                },
+                generationConfig: {
+                    maxOutputTokens: 300, 
+                    temperature: 0.7
                 }
-            } catch (err) {
-                console.warn(`Model ${model} failed`, err);
-            }
-        }
-
+            })
+        });
+        
         const loadingEl = document.getElementById(loadingId);
         if(loadingEl) loadingEl.remove();
 
-        if (successData) {
-            const aiText = successData.candidates[0].content.parts[0].text;
-            addChatMessage('ai', aiText);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.candidates && data.candidates[0].content) {
+                const aiText = data.candidates[0].content.parts[0].text;
+                addChatMessage('ai', aiText);
+            }
         } else {
-             if (!userMessage.includes("勝利")) {
-                addChatMessage('system', "AI 暫時無法回應 (請檢查 API Key 或網路)。");
+            const errData = await response.json();
+            console.error("Gemini API Error:", errData);
+            
+            // 錯誤處理與保底重試
+            if (modelName !== "gemini-1.5-flash") {
+                addChatMessage('system', `最新模型 (${modelName}) 發生問題，正在切換至穩定版...`);
+                cachedModelId = null; // 清除快取，強制下次重抓
+            } else {
+                addChatMessage('system', `連線失敗：${errData.error?.message || "請檢查 API Key"}`);
             }
         }
 
@@ -632,7 +674,7 @@ async function callGeminiChat(userMessage) {
         const loadingEl = document.getElementById(loadingId);
         if(loadingEl) loadingEl.remove();
         console.error(e);
-        addChatMessage('system', "發生錯誤：" + e.message);
+        addChatMessage('system', "程式錯誤：" + e.message);
     }
 }
 
