@@ -545,42 +545,45 @@ async function callGeminiChat(userMessage) {
     chatHistory.appendChild(loadingDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
 
+    // 使用支援 System Instruction 的模型 (優先嘗試 2.5)
     const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.0-pro"];
 
     try {
         const bad = currentPKContext.bad;
         const good = currentPKContext.good;
+        const badText = bad ? `${bad.title} (內容: ${bad.content})` : "未知";
+        const goodText = good ? `${good.title} (內容: ${good.content})` : "未知";
         
-        // 構建上下文歷史 (取最近 6 則)
-        const historyText = currentPKContext.chatLogs.slice(-6)
-            .map(log => `${log.role === 'user' ? '使用者' : '你'}: ${log.text}`)
-            .join('\n');
+        // 1. 轉換歷史紀錄 (將 GoodWins 的 'ai' 角色轉為 Gemini API 的 'model')
+        // 注意：addChatMessage 已經將最新的 userMessage 存入 currentPKContext.chatLogs，所以這裡直接用即可
+        let contents = currentPKContext.chatLogs.map(log => ({
+            role: log.role === 'ai' ? 'model' : 'user',
+            parts: [{ text: log.text }]
+        }));
 
-        // [關鍵修改] 融合舊有詳細邏輯 + 新增的限制與辯證需求
-        const prompt = `
-            情境：使用者正在使用「GoodWins」APP，進行「好事 vs 鳥事」的 PK 對抗。
-            【鳥事 (Bad Thing)】：${bad ? bad.title + ' - ' + bad.content : '無'}
-            【好事 (Good Thing)】：${good ? good.title + ' - ' + good.content : '無'}
-            【之前的對話脈絡】：
-            ${historyText}
-            【使用者目前的訊息】：${userMessage}
+        // 2. 設定 System Instruction (核心策略)
+        // 透過 instruction 控制 AI 行為，達成「第一次說服，之後閒聊」的效果
+        const systemInstruction = `
+        你現在是一位「理性、幽默且溫暖的朋友」，正在陪使用者玩「GoodWins」APP（好事 vs 鳥事 PK）。
+        
+        【當前戰況】
+        鳥事：${badText}
+        好事：${goodText}
 
-            角色設定：你不是高高在上的導師，也不是盲目灌雞湯的機器人。你是使用者身邊一位「理性、幽默且溫暖的朋友」。
-            
-            核心任務 (請融合以下邏輯)：
-            1. 【同理情緒】：先接住使用者的情緒（例如：遇到這種事真的很煩），不要一上來就說教。
-            2. 【脈絡意識】：請參考【之前的對話脈絡】，不要重複你已經說過的論點。如果使用者在閒聊，就自然回應。
-            3. 【理性說服】：運用理性客觀的角度，說明「為什麼這件好事的光明面，足以證明世界沒有那麼糟」。請參考以下「好事選擇邏輯」來論述：
-               - (如果兩件事性質相似)：強調「你看，雖然有那種鳥事，但同樣情境下也有這樣溫暖的好事發生，人性還是有光輝的。」
-               - (如果性質不同但等級相當)：強調「雖然鳥事很扣分，但這件好事的價值和快樂足以抵銷那份不愉快。」
-               - (如果是廣泛觀察)：強調「雖然鳥事存在，但從這件好事來看，善意其實更常態。」
-            4. 【人性辯證 (升級層次)】：如果使用者覺得這件事情很鳥，那表示使用者無法欣賞這件事情所引出的人性，那麼好事卡可以被使用者欣賞、信任嗎？請從這個點下去辯證。引導他思考：既然能敏銳感知惡，是否也能信任這張好事卡背後的「善」？如果因為鳥事而全盤否定好事，是否也否定了自己相信美好的能力？
+        【你的對話策略】
+        1. **初次見面 (First Turn)**：
+           - 如果這是這場 PK 的第一句對話，請嘗試用幽默或理性的角度，說服我為什麼這件「好事」的價值可以抵銷「鳥事」。
+           - 重點在於「觀點轉換」，而非強迫接受。
+           
+        2. **後續閒聊 (Subsequent Turns)**：
+           - **不要**再一直跳針重複比較這兩件事！除非我主動問起好事的細節。
+           - **順著話聊**：請根據【對話歷史】的脈絡回應。如果我開始抱怨別的、吐苦水、或只是打屁開玩笑，你就陪我聊那個話題。
+           - **記憶力**：記得我們剛剛聊過的內容，不要每一句都像剛認識。
 
-            語氣限制：
-            1. 【日常口語】：像跟朋友傳訊息一樣自然，不要文謅謅，不要用書面語。
-            2. 【禁止肉麻】：絕對不要叫使用者「親愛的」、「孩子」、「寶貝」等過度親密的稱呼。
-            3. 【理性不盲目】：不要只說「好事會贏」，要說出「為什麼贏」（例如：因為這代表了真實的善意）。
-            4. 【短促有力】：回應請嚴格限制在 **100字以內** (包含標點)。這點非常重要。
+        3. **語氣設定**：
+           - 自然口語，像跟朋友傳訊息一樣 (禁止文謅謅)。
+           - **禁止肉麻** (不要叫親愛的、寶貝)。
+           - 保持簡短 (100字以內)。
         `;
 
         let successData = null;
@@ -589,8 +592,18 @@ async function callGeminiChat(userMessage) {
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    body: JSON.stringify({
+                        contents: contents, // 傳送完整對話紀錄
+                        systemInstruction: {
+                            parts: [{ text: systemInstruction }] // 傳送人設與規則
+                        },
+                        generationConfig: {
+                            maxOutputTokens: 300, 
+                            temperature: 0.7
+                        }
+                    })
                 });
+                
                 if (response.ok) {
                     const data = await response.json();
                     if (data.candidates && data.candidates[0].content) {
@@ -598,7 +611,9 @@ async function callGeminiChat(userMessage) {
                         break;
                     }
                 }
-            } catch (err) {}
+            } catch (err) {
+                console.warn(`Model ${model} failed`, err);
+            }
         }
 
         const loadingEl = document.getElementById(loadingId);
@@ -608,16 +623,16 @@ async function callGeminiChat(userMessage) {
             const aiText = successData.candidates[0].content.parts[0].text;
             addChatMessage('ai', aiText);
         } else {
-            // [修改] 勝利後即使 AI 暫時無法回應，也不要顯示錯誤訊息干擾心情
-            if (!userMessage.includes("勝利")) {
-                addChatMessage('system', "AI 暫時無法回應。");
+             if (!userMessage.includes("勝利")) {
+                addChatMessage('system', "AI 暫時無法回應 (請檢查 API Key 或網路)。");
             }
         }
 
     } catch (e) {
         const loadingEl = document.getElementById(loadingId);
         if(loadingEl) loadingEl.remove();
-        addChatMessage('system', "連線錯誤。");
+        console.error(e);
+        addChatMessage('system', "發生錯誤：" + e.message);
     }
 }
 
