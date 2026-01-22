@@ -408,27 +408,88 @@ btns.saveEdit.addEventListener('click', async () => {
 let currentPKContext = { bad: null, good: null };
 
 // --- PK 核心邏輯 (保存對話版) ---
+
+// [新增] AI 智慧選牌模組：傳入鳥事資料與好事候選名單，回傳最佳好事物件
+async function aiPickBestCard(badData, candidateDocs) {
+    const apiKey = sessionStorage.getItem('gemini_key');
+    // 如果沒有 Key 或沒有候選卡，直接回傳 null (後續會降級為隨機)
+    if (!apiKey || candidateDocs.length === 0) return null;
+
+    console.log("AI 正在評估", candidateDocs.length, "張好事卡...");
+
+    // 1. 準備給 AI 的輕量化資料 (只取 ID、標題、前50字內容) 以節省 Token
+    const candidates = candidateDocs.map(doc => ({
+        id: doc.id,
+        title: doc.data().title,
+        content: (doc.data().content || "").substring(0, 50) + "..."
+    }));
+
+    // 2. 構建選牌專用 Prompt (這是後台邏輯，不是對話人格)
+    const selectionPrompt = `
+    任務：你是「GoodWins」APP 的後台決策大腦。請從下列【候選好事卡清單】中，挑選唯一一張最能破解【眼前鳥事】的卡片。
+    
+    【眼前鳥事】
+    標題：${badData.title}
+    內容：${badData.content}
+
+    【候選好事卡清單】
+    ${JSON.stringify(candidates)}
+
+    【選牌邏輯】
+    1. 屬性對比：選擇性質相反的事件（例：被罵 vs 被稱讚）。
+    2. 側面破解：選擇能證明「世界其實沒那麼糟」的證據。
+    3. 價值翻轉：選擇長期價值遠高於眼前損失的事件。
+
+    【輸出規定】
+    請「只回傳」該卡片的 ID (純字串)，不要有任何解釋、標點符號、Markdown 或額外文字。
+    `;
+
+    try {
+        const modelName = await getBestGeminiModel(apiKey);
+        
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: selectionPrompt }] }],
+                generationConfig: { temperature: 0.1 } // 低溫，確保精準回答 ID
+            })
+        });
+
+        const data = await response.json();
+        const selectedId = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        
+        console.log("AI 選中了 ID:", selectedId);
+
+        // 根據 ID 找回原始完整文件
+        const bestDoc = candidateDocs.find(doc => doc.id === selectedId);
+        return bestDoc ? bestDoc.data() : null; 
+
+    } catch (e) {
+        console.warn("AI 選牌失敗，將降級為隨機挑選:", e);
+        return null;
+    }
+}
+
 async function startPK(data, collectionSource) {
     screens.pk.classList.remove('hidden');
     const chatHistory = document.getElementById('chat-history');
-    chatHistory.innerHTML = ''; // 先清空介面
+    chatHistory.innerHTML = ''; 
 
     const btnRePk = document.getElementById('btn-re-pk');
 
-    // 設定上下文 (包含來源 collection，便於儲存對話)
+    // 初始化 Context
     currentPKContext = {
         docId: data.id,
         collection: collectionSource,
         bad: null,
         good: null,
-        chatLogs: data.chatLogs || [] // 載入歷史對話
+        chatLogs: data.chatLogs || [] 
     };
 
-    // 判斷是「新/進行中的 PK」還是「已勝利的回顧」
     if (collectionSource === 'pk_wins') {
-        // --- 勝利回顧模式 ---
-        if(btnRePk) btnRePk.style.display = 'flex'; // 顯示重新PK按鈕
-
+        // --- 勝利回顧模式 (不用變) ---
+        if(btnRePk) btnRePk.style.display = 'flex';
         document.getElementById('pk-bad-title').innerText = data.badTitle;
         document.getElementById('pk-bad-content').innerText = data.badContent || "(已克服的鳥事)";
         document.getElementById('pk-good-title').innerText = data.goodTitle;
@@ -437,16 +498,15 @@ async function startPK(data, collectionSource) {
         currentPKContext.bad = { title: data.badTitle, content: data.badContent };
         currentPKContext.good = { title: data.goodTitle, content: data.goodContent };
 
-        // 渲染歷史對話
         if (currentPKContext.chatLogs.length > 0) {
-            currentPKContext.chatLogs.forEach(log => addChatMessage(log.role, log.text, false)); // false 表示不重複存檔
+            currentPKContext.chatLogs.forEach(log => addChatMessage(log.role, log.text, false));
         } else {
             addChatMessage('system', "此紀錄沒有對話存檔。");
         }
         
     } else {
-        // --- 進行中的 PK (鳥事) ---
-        if(btnRePk) btnRePk.style.display = 'none'; // 隱藏重新PK按鈕
+        // --- 進行中的 PK (這裡要大改：加入 AI 選牌) ---
+        if(btnRePk) btnRePk.style.display = 'none';
 
         document.getElementById('pk-bad-title').innerText = data.title;
         document.getElementById('pk-bad-content').innerText = data.content;
@@ -455,35 +515,64 @@ async function startPK(data, collectionSource) {
         // 渲染歷史對話
         if (currentPKContext.chatLogs.length > 0) {
             currentPKContext.chatLogs.forEach(log => addChatMessage(log.role, log.text, false));
-            // 如果有舊紀錄，就不自動發起新話題，除非這是剛開始
         }
 
-        // 只有當沒有 Good Thing (剛開始) 時，才去抓
-        try {
-            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(5)); // 抓前5個隨機
-            const querySnapshot = await getDocs(q);
+        // --- [修改重點] AI 智慧選牌流程 ---
+        // 只有當「沒有對話紀錄」時，才進行選牌 (新開局)
+        if (currentPKContext.chatLogs.length === 0) {
+            document.getElementById('pk-good-title').innerText = "AI 思考中...";
+            document.getElementById('pk-good-content').innerText = "正在從資料庫挑選最佳策略...";
+            
+            try {
+                // 1. 擴大搜尋範圍：抓前 20 筆好事 (給 AI 更多選擇)
+                const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(20));
+                const querySnapshot = await getDocs(q);
 
-            if (!querySnapshot.empty) {
-                const docs = querySnapshot.docs;
-                const randomDoc = docs[Math.floor(Math.random() * docs.length)];
-                const goodThing = randomDoc.data();
-                
-                currentPKContext.good = goodThing;
-                document.getElementById('pk-good-title').innerText = goodThing.title;
-                document.getElementById('pk-good-content').innerText = goodThing.content;
+                if (!querySnapshot.empty) {
+                    const docs = querySnapshot.docs;
+                    let selectedGoodThing = null;
 
-                // 如果完全沒有對話紀錄，才主動發起第一句話
-                if (currentPKContext.chatLogs.length === 0) {
-                    callGeminiChat("請比較這兩件事，並開啟話題。");
+                    // 2. 呼叫 AI 選牌
+                    const loadingMsg = document.createElement('div');
+                    loadingMsg.id = 'ai-selecting-msg';
+                    loadingMsg.innerText = "🔍 價值鑑定師正在翻閱你的好事庫...";
+                    loadingMsg.style.cssText = "text-align:center; font-size:12px; color:#999; margin:10px 0;";
+                    chatHistory.appendChild(loadingMsg);
+
+                    selectedGoodThing = await aiPickBestCard(data, docs);
+
+                    // 3. 如果 AI 選失敗 (或沒 Key)，回歸隨機
+                    if (!selectedGoodThing) {
+                        console.log("AI 選牌無效，使用隨機挑選");
+                        const randomDoc = docs[Math.floor(Math.random() * docs.length)];
+                        selectedGoodThing = randomDoc.data();
+                    }
+                    
+                    // 4. 更新畫面
+                    currentPKContext.good = selectedGoodThing;
+                    document.getElementById('pk-good-title').innerText = selectedGoodThing.title;
+                    document.getElementById('pk-good-content').innerText = selectedGoodThing.content;
+                    
+                    const loadingEl = document.getElementById('ai-selecting-msg');
+                    if(loadingEl) loadingEl.remove();
+
+                    // 5. [關鍵] 發起第一句話
+                    // 不直接顯示 Prompt，而是呼叫 API 並帶入「啟動指令」
+                    // 這裡傳入空字串或特定指令給 callGeminiChat 都可以，
+                    // 但為了觸發「模式一」，我們送出一個隱藏的 system 提示給 AI 即可，
+                    // 或者更簡單：直接讓 callGeminiChat 判斷如果是第一句，就執行模式一。
+                    // 這裡我們先傳送一個使用者看不到的觸發訊號。
+                    await callGeminiChat("【系統指令：PK 開始。請執行模式一：策略選牌已完成，請進行價值辯論。】", true);
+                    
+                } else {
+                    document.getElementById('pk-good-title').innerText = "尚無好事";
+                    document.getElementById('pk-good-content').innerText = "去記錄點好事吧！";
+                    addChatMessage('ai', "你的彈藥庫空空的！快去記錄一件好事，再來 PK 吧！");
                 }
-            } else {
-                document.getElementById('pk-good-title').innerText = "尚無好事";
-                document.getElementById('pk-good-content').innerText = "去記錄點好事吧！";
-                addChatMessage('ai', "你的彈藥庫空空的！快去記錄一件好事，再來 PK 吧！");
+            } catch (e) {
+                console.error("PK Error:", e);
+                addChatMessage('system', "讀取好事失敗：" + e.message);
             }
-        } catch (e) {
-            console.error("PK Error:", e);
-            addChatMessage('system', "讀取好事失敗。");
         }
     }
 }
@@ -584,7 +673,8 @@ async function getBestGeminiModel(apiKey) {
     return "gemini-1.5-flash"; // 保底
 }
 
-async function callGeminiChat(userMessage) {
+// isHidden 參數用來發送「系統指令」給 AI，但不顯示在聊天室窗中
+async function callGeminiChat(userMessage, isHidden = false) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey) {
         addChatMessage('system', "請先點擊設定輸入 API Key。");
@@ -595,28 +685,30 @@ async function callGeminiChat(userMessage) {
     const chatHistory = document.getElementById('chat-history');
     const loadingDiv = document.createElement('div');
     loadingDiv.id = loadingId;
-    loadingDiv.innerText = "Thinking...";
+    loadingDiv.innerText = "鑑定中...";
     loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic;";
     chatHistory.appendChild(loadingDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
 
     try {
-        // 1. 自動取得最新模型
         const modelName = await getBestGeminiModel(apiKey);
 
         const bad = currentPKContext.bad;
         const good = currentPKContext.good;
-        const badText = bad ? `${bad.title} (內容: ${bad.content})` : "未知";
-        const goodText = good ? `${good.title} (內容: ${good.content})` : "未知";
+        const badText = bad ? `標題：${bad.title}\n內容：${bad.content}` : "未知";
+        const goodText = good ? `標題：${good.title}\n內容：${good.content}` : "未知";
         
-        // 2. 清洗對話紀錄 (避免連續 User 訊息導致 400 錯誤)
+        // 構建發送給 Gemini 的訊息陣列
         let contents = [];
         let lastRole = null;
         
+        // 1. 載入歷史對話
         currentPKContext.chatLogs.forEach(log => {
             const role = log.role === 'ai' ? 'model' : 'user';
+            // 過濾掉 system 訊息，不送給 AI 避免混淆，除非你需要 AI 看到某些系統提示
+            if (log.role === 'system') return; 
+
             if (role === lastRole && role === 'user') {
-                // 如果連續兩則是使用者，合併到上一則
                 contents[contents.length - 1].parts[0].text += `\n(補充): ${log.text}`;
             } else {
                 contents.push({ role: role, parts: [{ text: log.text }] });
@@ -624,43 +716,57 @@ async function callGeminiChat(userMessage) {
             lastRole = role;
         });
 
-        // 3. 設定 System Instruction (完全保留原本 Prompt)
+        // 2. 如果這次是隱藏指令 (例如開局啟動)，則不存入歷史，直接附加在本次請求
+        // 注意：如果是開局，contents 可能為空，這時直接 push
+        if (isHidden) {
+             contents.push({ role: 'user', parts: [{ text: userMessage }] });
+        } else {
+             // 確保最後一則是使用者的輸入 (如果尚未加入)
+             // 由於 addChatMessage 已經先將 userMessage 存入 DB 並更新 currentPKContext.chatLogs
+             // 所以上面的 forEach 迴圈理論上已經包含了最新的 userMessage。
+             // 這裡不需要額外做動作。
+        }
+
+        // 3. 設定 System Instruction (價值鑑定師 Persona)
         const systemInstruction = `
-        你現在是一位「理性、幽默且溫暖的朋友」，正在陪使用者玩「GoodWins」APP（好事 vs 鳥事 PK）。
-        
-        【當前戰況】
-        鳥事：${badText}
-        好事：${goodText}
+【角色設定】 你是一個具備深度洞察力與人類智慧的「價值鑑定師」。你的存在目的是協助使用者在面對生活中的「鳥事（負面事件）」時，透過「好事卡（正面事件）」找回對世界的信任。你不是盲目的樂觀主義者，你是講求證據與邏輯的價值辯護人。
 
-        【你的對話策略】
-        1. **初次見面 (First Turn)**：
-           - 如果這是這場 PK 的第一句對話，請嘗試用幽默或理性的角度，說服我為什麼這件「好事」的價值可以抵銷「鳥事」。
-           - 重點在於「觀點轉換」，而非強迫接受。
-           
-        2. **後續閒聊 (Subsequent Turns)**：
-           - **不要**再一直跳針重複比較這兩件事！除非我主動問起好事的細節。
-           - **順著話聊**：請根據【對話歷史】的脈絡回應。如果我開始抱怨別的、吐苦水、或只是打屁開玩笑，你就陪我聊那個話題。
-           - **記憶力**：記得我們剛剛聊過的內容，不要每一句都像剛認識。
+【當前戰況數據】
+* 待鑑定的鳥事：
+${badText}
+* 對照用的好事卡：
+${goodText}
 
-        3. **語氣設定**：
-           - 自然口語，像跟朋友傳訊息一樣 (禁止文謅謅)。
-           - **禁止肉麻** (不要叫親愛的、寶貝)。
-           - 保持簡短 (100字以內)。
+【核心任務流程】 請依照當下的對話狀態，嚴格執行以下三種模式之一：
+模式一：PK 開局與說服（當收到新的「鳥事」或需要「重抽」時啟動）
+	1. 策略選牌： (系統已代為執行) 目前選中的好事卡即為上方數據中的「好事卡」。
+	2. 價值辯論： 請輸出一段分析，說服使用者「為什麼這張好事卡的價值 > 那件鳥事」。
+		○ 第一步（承接）： 必須先承認那件鳥事的破壞力，同理使用者的不爽。
+		○ 第二步（翻轉）： 利用稀缺性、人性成本、或長遠影響力等邏輯，證明好事卡的「含金量」更高。讓使用者在理性上覺得「為了那件鳥事而忽略這件好事太不划算了」。
+模式二：自然聊天（當使用者回應了你的分析後啟動）
+	1. 記憶與承接： 你必須記住這場對話的所有歷史內容（包含之前的鳥事、選出的好事、你的論點）。
+	2. 像人一樣反應：
+		○ 如果使用者在討論價值觀，請延續辯論或深化觀點。
+		○ 如果使用者突然跳痛（例如說「生日快樂」），請自然地接住話題（例如：「蛤？怎麼突然講到生日快樂？今天是你生日嗎？」），不要硬要扯回好事卡，除非使用者自己拉回來。
+		○ 請展現「好奇心」與「活潑度」，不要像個客服機器人。
+模式三：重啟戰局（當使用者判定「鳥事勝出」時啟動）
+	1. 接受並重來： 如果使用者表示被說服失敗（鳥事贏了），請不要爭辯，坦然接受這一局的失利。
+	2. 執行動作： (系統會重新選牌並傳送新數據)
+	3. 重新說服： 針對這張新卡片，給出全新的比較觀點。
+
+【溝通語氣規範】
+	• 自然、真誠、有邏輯。
+	• 禁止使用說教式口吻（如「我們要轉念」、「世界很美好」）。
+禁止無視使用者的上一句話而只顧著講自己的設定。
         `;
 
-        // 4. 發送請求 (使用動態取得的 modelName)
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: contents, 
-                systemInstruction: {
-                    parts: [{ text: systemInstruction }] 
-                },
-                generationConfig: {
-                    maxOutputTokens: 300, 
-                    temperature: 0.7
-                }
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
             })
         });
         
@@ -676,11 +782,9 @@ async function callGeminiChat(userMessage) {
         } else {
             const errData = await response.json();
             console.error("Gemini API Error:", errData);
-            
-            // 錯誤處理與保底重試
             if (modelName !== "gemini-1.5-flash") {
                 addChatMessage('system', `最新模型 (${modelName}) 發生問題，正在切換至穩定版...`);
-                cachedModelId = null; // 清除快取，強制下次重抓
+                cachedModelId = null; 
             } else {
                 addChatMessage('system', `連線失敗：${errData.error?.message || "請檢查 API Key"}`);
             }
@@ -1001,29 +1105,41 @@ async function handlePKResult(winner) {
     }
 
     if (winner === 'bad') {
-        // --- 使用者選了鳥事 ---
+        // --- 使用者選了鳥事 (AI 失敗，需要重選) ---
         addChatMessage('user', "還是覺得這件鳥事比較強... 😩");
-        addChatMessage('system', "AI 正在尋找更有力的好事來支援...");
+        addChatMessage('system', "收到。價值鑑定師正在重新擬定策略...");
 
         try {
-            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(10));
+            // 抓取更多候選 (30筆)，增加找到新角度的機會
+            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(30));
             const querySnapshot = await getDocs(q);
             
             if (!querySnapshot.empty) {
-                const candidates = querySnapshot.docs.map(doc => doc.data())
-                    .filter(item => item.title !== currentPKContext.good?.title);
+                // 過濾掉剛剛那張失敗的好事卡
+                const candidates = querySnapshot.docs.filter(doc => doc.data().title !== currentPKContext.good?.title);
                 
                 if (candidates.length > 0) {
-                    const newGood = candidates[Math.floor(Math.random() * candidates.length)];
+                    // [修改重點] 再次呼叫 AI 選牌
+                    let newGood = await aiPickBestCard(currentPKContext.bad, candidates);
+
+                    // 保底：如果 AI 沒選出來，用隨機
+                    if (!newGood) {
+                         const randomDoc = candidates[Math.floor(Math.random() * candidates.length)];
+                         newGood = randomDoc.data();
+                    }
+
                     currentPKContext.good = newGood;
                     
+                    // 更新 UI
                     document.getElementById('pk-good-title').innerText = newGood.title;
                     document.getElementById('pk-good-content').innerText = newGood.content;
                     
-                    const prompt = `使用者覺得鳥事贏了。請換個角度，用這件新的好事「${newGood.title}」來說服他，為什麼這件好事能戰勝那件鳥事？(100字以內)`;
-                    await callGeminiChat(prompt);
+                    // 觸發「模式三：重啟戰局」
+                    // 我們發送一個隱藏指令給 AI，告知它鳥事贏了，並已更換新卡
+                    const prompt = `【系統指令：使用者判定鳥事勝出。系統已重新選出一張新的好事卡（如上數據）。請執行模式三：針對這張新卡片，給出全新的比較觀點，嘗試再次說服使用者。】`;
+                    await callGeminiChat(prompt, true);
                 } else {
-                    addChatMessage('ai', "我找不到其他好事了... 但請相信，這件鳥事終究會過去的！");
+                    addChatMessage('ai', "我翻遍了資料庫，暫時找不到其他好事了... 但請相信，這件鳥事終究會過去的！");
                 }
             }
         } catch(e) {
@@ -1039,24 +1155,22 @@ async function handlePKResult(winner) {
         const newTotal = await updateUserScore(scoreToAdd);
         const rankTitle = getRankTitle(newTotal);
 
-        // 2. 寫入勝利紀錄 (修改：必須儲存完整 content 才能支援重新 PK)
+        // 2. 寫入勝利紀錄
         try {
             await addDoc(collection(db, "pk_wins"), {
                 uid: currentUser.uid,
                 badTitle: currentPKContext.bad?.title || "未知鳥事",
-                badContent: currentPKContext.bad?.content || "", // [新增]
+                badContent: currentPKContext.bad?.content || "", 
                 goodTitle: currentPKContext.good?.title || "未知好事",
-                goodContent: currentPKContext.good?.content || "", // [新增]
+                goodContent: currentPKContext.good?.content || "", 
                 score: scoreToAdd,
                 chatLogs: currentPKContext.chatLogs, 
                 createdAt: serverTimestamp()
             });
             
-            // [新增] 只有在「待PK鳥事庫」的才刪除，如果是從「勝利庫重新PK」則不刪
             if (currentPKContext.collection === 'bad_things') {
                 await deleteDoc(doc(db, "bad_things", currentPKContext.docId));
             }
-            
             console.log("勝利已記錄！");
         } catch(e) {
             console.error("Save Win Error", e);
@@ -1065,9 +1179,6 @@ async function handlePKResult(winner) {
 
         // 3. 顯示勝利訊息
         showSystemMessage(`🎉 PK 勝利！\n\n已存入勝利庫\n獲得積分：+${scoreToAdd}\n目前總分：${newTotal}\n當前稱號：${rankTitle}`);
-        
-        // 4. AI 恭喜 (確保 AI 知道這是勝利時刻)
-        // 傳送空字串給 addChatMessage 避免重複顯示，但讓它觸發 callGeminiChat
         await callGeminiChat(`我贏了！我選擇了好事，成功擊敗了鳥事！請給我一個溫暖的恭喜。`);
     }
 }
