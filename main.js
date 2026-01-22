@@ -19,6 +19,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
+
 // --- 4. 動態生成 UI (這就是妳要的：介面寫在 JS 裡) ---
 function createEditorHTML() {
     if (document.getElementById('editor-modal')) return;
