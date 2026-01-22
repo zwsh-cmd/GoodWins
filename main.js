@@ -685,7 +685,7 @@ async function callGeminiChat(userMessage, isHidden = false) {
     const chatHistory = document.getElementById('chat-history');
     const loadingDiv = document.createElement('div');
     loadingDiv.id = loadingId;
-    loadingDiv.innerText = "鑑定中...";
+    loadingDiv.innerText = "Thinking..."; // [修正] 改回原本的思考中
     loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic;";
     chatHistory.appendChild(loadingDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -705,7 +705,8 @@ async function callGeminiChat(userMessage, isHidden = false) {
         // 1. 載入歷史對話
         currentPKContext.chatLogs.forEach(log => {
             const role = log.role === 'ai' ? 'model' : 'user';
-            // 過濾掉 system 訊息，不送給 AI 避免混淆，除非你需要 AI 看到某些系統提示
+            // 過濾掉 system 訊息，但如果是 "系統指令" 開頭的特殊訊息(例如切換模式)，則可以保留給 AI 看
+            // 這裡簡單處理：只要是 system 都隱藏，除非你在 addChatMessage 有特殊標記
             if (log.role === 'system') return; 
 
             if (role === lastRole && role === 'user') {
@@ -717,15 +718,12 @@ async function callGeminiChat(userMessage, isHidden = false) {
         });
 
         // 2. 如果這次是隱藏指令 (例如開局啟動)，則不存入歷史，直接附加在本次請求
-        // 注意：如果是開局，contents 可能為空，這時直接 push
         if (isHidden) {
              contents.push({ role: 'user', parts: [{ text: userMessage }] });
-        } else {
-             // 確保最後一則是使用者的輸入 (如果尚未加入)
-             // 由於 addChatMessage 已經先將 userMessage 存入 DB 並更新 currentPKContext.chatLogs
-             // 所以上面的 forEach 迴圈理論上已經包含了最新的 userMessage。
-             // 這裡不需要額外做動作。
         }
+        
+        // [除錯] 在 console 印出完整的對話紀錄，方便檢查是否失憶
+        console.log("Sending Chat History to AI:", contents);
 
         // 3. 設定 System Instruction (價值鑑定師 Persona)
         const systemInstruction = `
@@ -766,7 +764,8 @@ ${goodText}
             body: JSON.stringify({
                 contents: contents, 
                 systemInstruction: { parts: [{ text: systemInstruction }] },
-                generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
+                // [修正] 設定 Token 上限為 4000
+                generationConfig: { maxOutputTokens: 4000, temperature: 0.7 }
             })
         });
         
