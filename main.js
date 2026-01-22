@@ -547,8 +547,24 @@ async function getBestGeminiModel(apiKey) {
             m.supportedGenerationMethods.includes("generateContent")
         );
 
-        // 排序：版本號大的優先 (例如 1.5 > 1.0)
+        // [修改重點] 排序邏輯優化：Flash優先 > 穩定版優先 > 版本號新優先
         candidates.sort((a, b) => {
+            const nameA = a.name.toLowerCase();
+            const nameB = b.name.toLowerCase();
+            
+            // 優先權 1: 含有 "flash" 的排前面 (最適合 App 使用，速度快且額度高)
+            const isFlashA = nameA.includes("flash");
+            const isFlashB = nameB.includes("flash");
+            if (isFlashA && !isFlashB) return -1;
+            if (!isFlashA && isFlashB) return 1;
+
+            // 優先權 2: 避免 "preview" 或 "exp" (實驗版通常限制嚴格，易跳 429 錯誤)
+            const isStableA = !nameA.includes("preview") && !nameA.includes("exp");
+            const isStableB = !nameB.includes("preview") && !nameB.includes("exp");
+            if (isStableA && !isStableB) return -1;
+            if (!isStableA && isStableB) return 1;
+
+            // 優先權 3: 版本號越新越好 (例如 2.0 > 1.5)
             const getVer = (name) => {
                 const match = name.match(/gemini-(\d+\.?\d*)/);
                 return match ? parseFloat(match[1]) : 0;
