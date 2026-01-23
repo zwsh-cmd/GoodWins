@@ -302,14 +302,37 @@ const screens = {
 // 補上 PK 離開按鈕的監聽
 const btnExitPK = document.getElementById('btn-exit-pk');
 if(btnExitPK) {
-    btnExitPK.addEventListener('click', () => {
+    btnExitPK.addEventListener('click', async () => {
         // [新增] 離開時立即中斷 AI
         if (currentAbortController) {
             currentAbortController.abort();
             currentAbortController = null;
             console.log("已中斷 PK 連線");
         }
+
+        // [核心修改] 如果是鳥事且未勝利，將其重置為「待PK」的一般狀態 (isDefeated: false)
+        // 這樣「再擊敗」失敗或「重新PK」中途離開，都會回到一般列表
+        if (currentPKContext.collection === 'bad_things' && !currentPKContext.isVictory && currentPKContext.docId) {
+            try {
+                const docRef = doc(db, 'bad_things', currentPKContext.docId);
+                await updateDoc(docRef, {
+                    isDefeated: false,
+                    updatedAt: serverTimestamp()
+                });
+                console.log("鳥事已重置為待PK狀態");
+            } catch (e) {
+                console.error("Reset bad thing status failed:", e);
+            }
+        }
+
         screens.pk.classList.add('hidden');
+        
+        // 如果倉庫開啟中，重整列表以顯示最新狀態
+        if (!screens.warehouse.classList.contains('hidden')) {
+            const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
+                               document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
+            loadWarehouseData(currentTab);
+        }
     });
 }
 
@@ -1003,7 +1026,7 @@ function createWarehouseHTML() {
             <button id="btn-close-warehouse" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">關閉</button>
         </header>
         <div style="padding: 10px 20px; display: flex; gap: 8px; overflow-x: auto;">
-            <button id="tab-wins" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #FFD700; color: #FFF; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
+            <button id="tab-wins" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #E0C060; color: #FFF; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
             <button id="tab-good" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">好事庫</button>
             <button id="tab-bad" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">待PK鳥事</button>
         </div>
@@ -1141,7 +1164,8 @@ async function loadWarehouseData(type) {
     let emptyMsg = '';
 
     if (type === 'wins') {
-        if(tabWins) { tabWins.style.background = '#FFD700'; tabWins.style.color = '#FFF'; } 
+        // [修改] 降低勝利庫按鈕彩度
+        if(tabWins) { tabWins.style.background = '#E0C060'; tabWins.style.color = '#FFF'; } 
         collectionName = 'pk_wins';
         emptyMsg = '還沒有勝利紀錄喔！<br>快去 PK 幾場吧！';
     } else if (type === 'good') {
@@ -1177,14 +1201,18 @@ async function loadWarehouseData(type) {
             let displayTitle = data.title;
             let displayContent = data.content;
             
+            // [修改] 按鈕樣式 (圖示化、靠右排列)
+            const btnStyle = `width:36px; height:36px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;`;
+
             if (type === 'good') { 
                 iconColor = 'var(--good-icon)'; 
                 labelText = `等級: ${data.score || 1}`;
                 
+                // [修改] 好事庫：圖示按鈕 (編輯、刪除)，靠右排列
                 actionButtonsHTML = `
-                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px;">
-                        <button data-action="edit" data-id="${docId}" style="flex:1; background:#EEE; color:#666; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">寫筆記</button>
-                        <button data-action="delete" data-id="${docId}" style="flex:1; background:#FFEBEE; color:var(--bad-icon); border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">垃圾桶</button>
+                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end;">
+                        <button data-action="edit" data-id="${docId}" style="${btnStyle} background:#EEE; color:#666;" title="編輯">✏️</button>
+                        <button data-action="delete" data-id="${docId}" style="${btnStyle} background:#FFEBEE; color:var(--bad-icon);" title="刪除">🗑️</button>
                     </div>
                 `;
             }
@@ -1192,38 +1220,41 @@ async function loadWarehouseData(type) {
                 iconColor = 'var(--bad-icon)'; 
                 labelText = `等級: ${data.score || 1}`;
                 
-                // [修改] 判斷是否已被擊敗
+                // 判斷是否已被擊敗
                 let btnDefeatText = "擊敗它";
                 let btnDefeatColor = "var(--primary)";
                 let extraTitle = "";
                 
                 if (data.isDefeated) {
                     btnDefeatText = "再擊敗";
-                    btnDefeatColor = "#FF9800"; // 橘色表示再戰
+                    btnDefeatColor = "#FF9800"; // 橘色
                     extraTitle = `<span style="font-size:12px; color:#4CAF50; margin-left:5px;">(已被擊敗)</span>`;
                     displayTitle = displayTitle + extraTitle;
                 }
 
-                // 傳入 lastWinId 供再擊敗使用
+                // [修改] 鳥事庫：擊敗(文字按鈕) + 圖示(編輯、刪除)，靠右排列
+                // 擊敗按鈕保持文字，但樣式調整為與圖示高度一致的圓角按鈕
+                const defeatBtnStyle = `height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; color:#FFF; background:${btnDefeatColor};`;
+
                 actionButtonsHTML = `
-                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px;">
-                        <button data-action="defeat" data-id="${docId}" data-win-id="${data.lastWinId || ''}" style="flex:1; background:${btnDefeatColor}; color:#FFF; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">${btnDefeatText}</button>
-                        <button data-action="edit" data-id="${docId}" style="flex:1; background:#EEE; color:#666; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">寫筆記</button>
-                        <button data-action="delete" data-id="${docId}" style="flex:1; background:#FFEBEE; color:var(--bad-icon); border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">垃圾桶</button>
+                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end; align-items:center;">
+                        <button data-action="defeat" data-id="${docId}" data-win-id="${data.lastWinId || ''}" style="${defeatBtnStyle}">${btnDefeatText}</button>
+                        <button data-action="edit" data-id="${docId}" style="${btnStyle} background:#EEE; color:#666;" title="編輯">✏️</button>
+                        <button data-action="delete" data-id="${docId}" style="${btnStyle} background:#FFEBEE; color:var(--bad-icon);" title="刪除">🗑️</button>
                     </div>
                 `;
             }
             else { 
-                iconColor = '#FFD700'; 
-                labelText = '🏆 PK 勝利';
+                iconColor = '#E0C060'; // [修改] 配合降低彩度
+                labelText = ''; // [修改] 移除「PK 勝利」文字標籤
                 displayTitle = `擊敗「${data.badTitle}」`;
                 displayContent = `戰友：${data.goodTitle}`;
 
-                // [修改] 加入刪除按鈕
+                // [修改] 勝利庫：回顧(文字) + 刪除(圖示)，靠右排列
                 actionButtonsHTML = `
-                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px;">
-                        <button data-action="review" data-id="${docId}" style="flex:1; background:#FFF9C4; color:#FBC02D; border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold;">回顧勝利</button>
-                        <button data-action="delete" data-id="${docId}" style="width:40px; background:#FFEBEE; color:var(--bad-icon); border:none; padding:6px; border-radius:6px; font-size:12px; cursor:pointer;">🗑️</button>
+                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end;">
+                        <button data-action="review" data-id="${docId}" style="height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; background:#FFF9C4; color:#FBC02D;">回顧勝利</button>
+                        <button data-action="delete" data-id="${docId}" style="${btnStyle} background:#FFEBEE; color:var(--bad-icon);" title="刪除">🗑️</button>
                     </div>
                 `;
             }
@@ -1237,9 +1268,7 @@ async function loadWarehouseData(type) {
                             <span style="font-size: 12px; color: #BBB;">${date}</span>
                         </div>
                         <div style="font-size: 13px; color: #666; line-height: 1.4;">${displayContent}</div>
-                        <div style="margin-top: 8px; font-size: 12px; color: ${iconColor}; font-weight: 700;">
-                            ${labelText}
-                        </div>
+                        ${labelText ? `<div style="margin-top: 8px; font-size: 12px; color: ${iconColor}; font-weight: 700;">${labelText}</div>` : ''}
                         ${actionButtonsHTML}
                     </div>
                 </div>
