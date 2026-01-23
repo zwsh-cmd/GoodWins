@@ -134,8 +134,9 @@ function showSystemMessage(msg) {
 function createPKScreenHTML() {
     if (document.getElementById('pk-screen')) return;
 
-    // [修改] 1. 調整卡片內的文字對齊為左對齊 (text-align: left)
-    // [修改] 2. 在內容下方加入展開小箭頭 (class="expand-arrow")
+    // [修改] 1. 調整文字左對齊
+    // [修改] 2. 增加 expand-arrow
+    // [修改] 3. 調整 btn-re-pk 為懸浮圓形按鈕，覆蓋在中間
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
@@ -148,7 +149,7 @@ function createPKScreenHTML() {
 
         <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 15px;">
             
-            <div style="display: flex; align-items: stretch; gap: 10px; flex-shrink: 0;">
+            <div style="display: flex; align-items: stretch; gap: 10px; flex-shrink: 0; position: relative;">
                 <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 5px 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left;">
                     <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
                     <div style="flex: 1;">
@@ -158,9 +159,8 @@ function createPKScreenHTML() {
                     <div class="expand-arrow" style="text-align:center; color:var(--bad-icon); opacity:0.5; padding:5px 0; font-size:10px;">▼</div>
                 </div>
 
-                <div id="btn-re-pk" style="width: 40px; display:none; flex-direction:column; justify-content:center; align-items:center; background:#EEE; border-radius:12px; cursor:pointer; gap:4px;">
-                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:none; stroke:#666; stroke-width:2;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                    <span style="font-size:12px; font-weight:bold; color:#666; writing-mode: vertical-rl;">重來</span>
+                <div id="btn-re-pk" style="display:none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; justify-content:center; align-items:center; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); border-radius: 50%; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid rgba(0,0,0,0.05); z-index: 10;">
+                    <svg viewBox="0 0 24 24" style="width:22px; height:22px; fill:none; stroke:var(--primary); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
                 </div>
 
                 <div id="btn-pk-good" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 5px 20px; background: var(--good-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left;">
@@ -541,10 +541,12 @@ async function startPK(data, collectionSource) {
     currentPKContext = {
         docId: data.id,
         collection: collectionSource,
+        // [新增] 如果是回顧勝利，記錄勝利ID，方便後續更新同一筆
+        winId: collectionSource === 'pk_wins' ? data.id : null, 
         bad: null,
         good: null,
         chatLogs: data.chatLogs || [],
-        isVictory: false // [新增] 預設為戰鬥中
+        isVictory: false 
     };
 
     if (collectionSource === 'pk_wins') {
@@ -752,7 +754,6 @@ async function callGeminiChat(userMessage, isHidden = false) {
     chatHistory.scrollTop = chatHistory.scrollHeight;
 
     try {
-        // [修改] 1. 取得天梯列表
         const modelList = await getSortedModelList(apiKey);
         
         // 準備對話內容 (不變)
@@ -780,6 +781,7 @@ async function callGeminiChat(userMessage, isHidden = false) {
              contents.push({ role: 'user', parts: [{ text: userMessage }] });
         }
         
+        // [修改] 增加回應長度限制
         const systemInstruction = `
 【角色設定】 你是一個具備深度洞察力與人類智慧的「價值鑑定師」。你的存在目的是協助使用者在面對生活中的「鳥事（負面事件）」時，透過「好事卡（正面事件）」找回對世界的信任。你不是盲目的樂觀主義者，你是講求證據與邏輯的價值辯護人。
 
@@ -810,59 +812,63 @@ ${goodText}
 	• 自然、真誠、有邏輯。
 	• 禁止使用說教式口吻（如「我們要轉念」、「世界很美好」）。
 禁止無視使用者的上一句話而只顧著講自己的設定。
+
+【回應限制】請將回應長度控制在120個中文字以內。
         `;
 
-        // [修改] 2. 瀑布式迴圈請求
+        // [修改] 無限重試迴圈
         let success = false;
-        let finalError = null;
 
-        for (const model of modelList) {
-            try {
-                console.log(`[聊天] 嘗試連線模型: ${model.id} ...`);
-                
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: contents, 
-                        systemInstruction: { parts: [{ text: systemInstruction }] },
-                        generationConfig: { maxOutputTokens: 3500, temperature: 0.7 }
-                    })
-                });
+        // 輔助函式：延遲
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-                const data = await response.json();
+        while (!success) {
+            let iterationError = null;
 
-                // 檢查是否包含錯誤物件 (API 回傳 200 但內容是 error 的情況)
-                if (data.error) throw new Error(`${data.error.code} - ${data.error.message}`);
-                
-                if (data.candidates && data.candidates[0].content) {
-                    const aiText = data.candidates[0].content.parts[0].text;
+            for (const model of modelList) {
+                try {
+                    console.log(`[聊天] 嘗試連線模型: ${model.id} ...`);
                     
-                    // 移除 Loading
-                    const loadingEl = document.getElementById(loadingId);
-                    if(loadingEl) loadingEl.remove();
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: contents, 
+                            systemInstruction: { parts: [{ text: systemInstruction }] },
+                            // [修改] Token 上限改為 2500
+                            generationConfig: { maxOutputTokens: 2500, temperature: 0.7 }
+                        })
+                    });
 
-                    // [修改] 成功！傳入 model.displayName 給 addChatMessage
-                    addChatMessage('ai', aiText, true, model.displayName);
-                    success = true;
-                    break; // 跳出迴圈
-                } else {
-                    throw new Error("EMPTY_RESPONSE");
+                    const data = await response.json();
+
+                    if (data.error) throw new Error(`${data.error.code} - ${data.error.message}`);
+                    
+                    if (data.candidates && data.candidates[0].content) {
+                        const aiText = data.candidates[0].content.parts[0].text;
+                        
+                        const loadingEl = document.getElementById(loadingId);
+                        if(loadingEl) loadingEl.remove();
+
+                        addChatMessage('ai', aiText, true, model.displayName);
+                        success = true; // 成功！
+                        break; // 跳出 for
+                    } else {
+                        throw new Error("EMPTY_RESPONSE");
+                    }
+
+                } catch (err) {
+                    console.warn(`[聊天] 模型 ${model.id} 失敗 (${err.message})`);
+                    iterationError = err;
+                    // 繼續 for 迴圈嘗試下一個模型
                 }
-
-            } catch (err) {
-                console.warn(`[聊天] 模型 ${model.id} 失敗 (${err.message})，切換下一階...`);
-                finalError = err;
-                // 這裡不做任何事，讓迴圈跑下一次 (continue)
             }
-        }
 
-        if (!success) {
-            const loadingEl = document.getElementById(loadingId);
-            if(loadingEl) loadingEl.remove();
-            
-            console.error("All models failed:", finalError);
-            addChatMessage('system', `連線失敗：所有模型皆忙碌或錯誤。\n(${finalError?.message || 'Unknown'})`);
+            if (success) break; // 跳出 while
+
+            // 如果 for 迴圈跑完所有模型都失敗
+            console.warn("所有模型皆忙碌，3秒後重新開始新一輪嘗試...");
+            await sleep(3000); // 等待 3 秒再從頭開始 (避免無限快速迴圈卡死瀏覽器)
         }
 
     } catch (e) {
@@ -1258,38 +1264,54 @@ async function handlePKResult(winner) {
 
         // 2. 寫入勝利紀錄
         try {
-            // 儲存勝利紀錄，並記錄原始鳥事的 ID (如果有的話)
-            const winData = {
-                uid: currentUser.uid,
-                badTitle: currentPKContext.bad?.title || "未知鳥事",
-                badContent: currentPKContext.bad?.content || "", 
-                goodTitle: currentPKContext.good?.title || "未知好事",
-                goodContent: currentPKContext.good?.content || "", 
-                score: scoreToAdd,
-                chatLogs: currentPKContext.chatLogs,
-                originalBadId: currentPKContext.collection === 'bad_things' ? currentPKContext.docId : null,
-                createdAt: serverTimestamp()
-            };
-            
-            const winRef = await addDoc(collection(db, "pk_wins"), winData);
-            
-            // [修改] 不刪除鳥事，而是標記為「已擊敗」
-            if (currentPKContext.collection === 'bad_things') {
-                await updateDoc(doc(db, "bad_things", currentPKContext.docId), {
-                    isDefeated: true,
-                    lastWinId: winRef.id, // 連結到這次的勝利紀錄
+            // [修改] 檢查是否已經有勝利紀錄 ID (避免重複產生標題)
+            if (currentPKContext.winId) {
+                 const winRef = doc(db, "pk_wins", currentPKContext.winId);
+                 await updateDoc(winRef, {
+                    goodTitle: currentPKContext.good?.title || "未知好事",
+                    goodContent: currentPKContext.good?.content || "", 
+                    chatLogs: currentPKContext.chatLogs, // 更新對話紀錄
                     updatedAt: serverTimestamp()
-                });
+                 });
+                 console.log("勝利紀錄已更新！");
+            } else {
+                // 第一次勝利，建立新紀錄
+                const winData = {
+                    uid: currentUser.uid,
+                    badTitle: currentPKContext.bad?.title || "未知鳥事",
+                    badContent: currentPKContext.bad?.content || "", 
+                    goodTitle: currentPKContext.good?.title || "未知好事",
+                    goodContent: currentPKContext.good?.content || "", 
+                    score: scoreToAdd,
+                    chatLogs: currentPKContext.chatLogs,
+                    originalBadId: currentPKContext.collection === 'bad_things' ? currentPKContext.docId : null,
+                    createdAt: serverTimestamp()
+                };
+                
+                const winRef = await addDoc(collection(db, "pk_wins"), winData);
+                currentPKContext.winId = winRef.id; // 記住 ID，下次更新用
+
+                // 更新原始鳥事狀態
+                if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
+                    await updateDoc(doc(db, "bad_things", currentPKContext.docId), {
+                        isDefeated: true,
+                        lastWinId: winRef.id, 
+                        updatedAt: serverTimestamp()
+                    });
+                }
+                console.log("新勝利已記錄！");
             }
-            console.log("勝利已記錄！");
+
         } catch(e) {
             console.error("Save Win Error", e);
             showSystemMessage("勝利紀錄儲存失敗：" + e.message);
         }
 
-        // 3. 顯示勝利訊息
+        // 3. 顯示勝利訊息 & 觸發 AI 恭喜
         showSystemMessage(`🎉 PK 勝利！\n\n已存入勝利庫\n獲得積分：+${scoreToAdd}\n目前總分：${newTotal}\n當前稱號：${rankTitle}`);
-        await callGeminiChat(`我贏了！我選擇了好事，成功擊敗了鳥事！請給我一個溫暖的恭喜。`);
+        
+        // [修改] 要求簡單的恭喜
+        await callGeminiChat(`我贏了！我選擇了好事，成功擊敗了鳥事！請給我一句簡單的恭喜。`);
     }
 }
 
