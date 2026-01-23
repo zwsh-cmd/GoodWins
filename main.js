@@ -130,13 +130,13 @@ function showSystemMessage(msg) {
     }
 }
 
-// --- 動態生成 PK 畫面 (修正版：無框線、無PK字樣、修復聊天) ---
+// --- 動態生成 PK 畫面 (修正版：深色底部防誤觸、灰色圓形重來按鈕) ---
 function createPKScreenHTML() {
     if (document.getElementById('pk-screen')) return;
 
-    // [修改] 1. 調整文字左對齊
-    // [修改] 2. 增加 expand-arrow
-    // [修改] 3. 調整 btn-re-pk 為懸浮圓形按鈕，覆蓋在中間
+    // [修改] 1. 卡片 padding-bottom 改為 0，讓底部深色區域貼底
+    // [修改] 2. expand-arrow 改為深色背景區塊，防誤觸
+    // [修改] 3. btn-re-pk 改為灰色半透明，使用簡單圖示
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
@@ -150,26 +150,26 @@ function createPKScreenHTML() {
         <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 15px;">
             
             <div style="display: flex; align-items: stretch; gap: 10px; flex-shrink: 0; position: relative;">
-                <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 5px 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left;">
+                <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 0 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left; overflow:hidden;">
                     <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
-                    <div style="flex: 1;">
+                    <div style="flex: 1; padding-bottom:15px;">
                         <h3 id="pk-bad-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4; text-align: left;">(標題)</h3>
                         <p id="pk-bad-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-align: left;">(內容...)</p>
                     </div>
-                    <div class="expand-arrow" style="text-align:center; color:var(--bad-icon); opacity:0.5; padding:5px 0; font-size:10px;">▼</div>
+                    <div class="expand-arrow" style="text-align:center; color:var(--bad-icon); opacity:0.6; padding:8px 0; font-size:10px; background:rgba(0,0,0,0.05); width:100%;">▼</div>
                 </div>
 
-                <div id="btn-re-pk" style="display:none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; justify-content:center; align-items:center; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); border-radius: 50%; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid rgba(0,0,0,0.05); z-index: 10;">
-                    <svg viewBox="0 0 24 24" style="width:22px; height:22px; fill:none; stroke:var(--primary); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                <div id="btn-re-pk" style="display:none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; justify-content:center; align-items:center; background: rgba(230, 230, 230, 0.7); backdrop-filter: blur(4px); border-radius: 50%; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.05); z-index: 10;">
+                    <svg viewBox="0 0 24 24" style="width:22px; height:22px; fill:none; stroke:#666; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
                 </div>
 
-                <div id="btn-pk-good" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 5px 20px; background: var(--good-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left;">
+                <div id="btn-pk-good" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 0 20px; background: var(--good-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left; overflow:hidden;">
                      <div style="color: var(--good-icon); font-size: 13px; font-weight: 700;">好事</div>
-                     <div style="flex: 1;">
+                     <div style="flex: 1; padding-bottom:15px;">
                         <h3 id="pk-good-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4; text-align: left;">(標題)</h3>
                         <p id="pk-good-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-align: left;">(內容...)</p>
                     </div>
-                    <div class="expand-arrow" style="text-align:center; color:var(--good-icon); opacity:0.5; padding:5px 0; font-size:10px;">▼</div>
+                    <div class="expand-arrow" style="text-align:center; color:var(--good-icon); opacity:0.6; padding:8px 0; font-size:10px; background:rgba(0,0,0,0.05); width:100%;">▼</div>
                 </div>
             </div>
 
@@ -191,10 +191,10 @@ function createPKScreenHTML() {
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', pkHTML);
         
-        // --- [新增] 展開箭頭邏輯 (防止冒泡，切換樣式) ---
+        // --- [修改] 展開箭頭邏輯 ---
         wrapper.querySelectorAll('.expand-arrow').forEach(arrow => {
             arrow.addEventListener('click', (e) => {
-                e.stopPropagation(); // 阻止觸發卡片的 PK 判定
+                e.stopPropagation(); // 阻止冒泡，避免點擊深色區域觸發投票
                 const p = arrow.previousElementSibling.querySelector('p');
                 if (p) {
                     if (p.style.webkitLineClamp === 'unset') {
@@ -244,7 +244,7 @@ function createPKScreenHTML() {
             });
         }
 
-        // --- 重新 PK 按鈕綁定 ---
+        // --- [修改] 重新 PK 按鈕綁定 ---
         const btnRePK = document.getElementById('btn-re-pk');
         if(btnRePK) {
             btnRePK.addEventListener('click', async () => {
@@ -256,7 +256,11 @@ function createPKScreenHTML() {
                         const querySnapshot = await getDocs(q);
                         if (!querySnapshot.empty) {
                              const docs = querySnapshot.docs;
+                             
+                             // [新增] 加上分隔線，不刪除舊對話
+                             addChatMessage('system', "--- 重新 PK ---", true);
                              addChatMessage('system', "價值鑑定師正在為你尋找新的觀點...", true);
+                             
                              const newGood = await aiPickBestCard(currentPKContext.bad, docs);
                              if (newGood) {
                                  currentPKContext.good = newGood;
@@ -284,6 +288,7 @@ createPKScreenHTML();
 let currentUser = null;
 let currentMode = '';
 let editingId = null; // [新增] 用來記錄正在編輯的文件 ID
+let currentAbortController = null; // [新增] 用於中斷 AI 請求
 
 const screens = {
     login: document.getElementById('login-screen'),
@@ -298,6 +303,12 @@ const screens = {
 const btnExitPK = document.getElementById('btn-exit-pk');
 if(btnExitPK) {
     btnExitPK.addEventListener('click', () => {
+        // [新增] 離開時立即中斷 AI
+        if (currentAbortController) {
+            currentAbortController.abort();
+            currentAbortController = null;
+            console.log("已中斷 PK 連線");
+        }
         screens.pk.classList.add('hidden');
     });
 }
@@ -744,6 +755,11 @@ async function callGeminiChat(userMessage, isHidden = false) {
         return;
     }
 
+    // [新增] 初始化中斷控制器
+    if (currentAbortController) currentAbortController.abort(); // 確保舊的已停止
+    currentAbortController = new AbortController();
+    const signal = currentAbortController.signal;
+
     const loadingId = 'loading-' + Date.now();
     const chatHistory = document.getElementById('chat-history');
     const loadingDiv = document.createElement('div');
@@ -756,7 +772,6 @@ async function callGeminiChat(userMessage, isHidden = false) {
     try {
         const modelList = await getSortedModelList(apiKey);
         
-        // 準備對話內容 (不變)
         const bad = currentPKContext.bad;
         const good = currentPKContext.good;
         const badText = bad ? `標題：${bad.title}\n內容：${bad.content}` : "未知";
@@ -781,7 +796,6 @@ async function callGeminiChat(userMessage, isHidden = false) {
              contents.push({ role: 'user', parts: [{ text: userMessage }] });
         }
         
-        // [修改] 增加回應長度限制
         const systemInstruction = `
 【角色設定】 你是一個具備深度洞察力與人類智慧的「價值鑑定師」。你的存在目的是協助使用者在面對生活中的「鳥事（負面事件）」時，透過「好事卡（正面事件）」找回對世界的信任。你不是盲目的樂觀主義者，你是講求證據與邏輯的價值辯護人。
 
@@ -816,26 +830,27 @@ ${goodText}
 【回應限制】請將回應長度控制在120個中文字以內。
         `;
 
-        // [修改] 無限重試迴圈
         let success = false;
-
-        // 輔助函式：延遲
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         while (!success) {
-            let iterationError = null;
+            // [新增] 檢查是否被中斷
+            if (signal.aborted) throw new Error("AbortError");
 
             for (const model of modelList) {
+                // [新增] 檢查是否被中斷
+                if (signal.aborted) throw new Error("AbortError");
+
                 try {
                     console.log(`[聊天] 嘗試連線模型: ${model.id} ...`);
                     
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        signal: signal, // [新增] 傳入 signal
                         body: JSON.stringify({
                             contents: contents, 
                             systemInstruction: { parts: [{ text: systemInstruction }] },
-                            // [修改] Token 上限改為 2500
                             generationConfig: { maxOutputTokens: 2500, temperature: 0.7 }
                         })
                     });
@@ -851,31 +866,37 @@ ${goodText}
                         if(loadingEl) loadingEl.remove();
 
                         addChatMessage('ai', aiText, true, model.displayName);
-                        success = true; // 成功！
-                        break; // 跳出 for
+                        success = true; 
+                        break; 
                     } else {
                         throw new Error("EMPTY_RESPONSE");
                     }
 
                 } catch (err) {
+                    if (err.name === 'AbortError' || err.message === 'AbortError') throw err;
                     console.warn(`[聊天] 模型 ${model.id} 失敗 (${err.message})`);
-                    iterationError = err;
-                    // 繼續 for 迴圈嘗試下一個模型
                 }
             }
 
-            if (success) break; // 跳出 while
-
-            // 如果 for 迴圈跑完所有模型都失敗
+            if (success) break; 
+            
             console.warn("所有模型皆忙碌，3秒後重新開始新一輪嘗試...");
-            await sleep(3000); // 等待 3 秒再從頭開始 (避免無限快速迴圈卡死瀏覽器)
+            await sleep(3000); 
         }
 
     } catch (e) {
         const loadingEl = document.getElementById(loadingId);
         if(loadingEl) loadingEl.remove();
-        console.error(e);
-        addChatMessage('system', "程式嚴重錯誤：" + e.message);
+        
+        // 如果是使用者手動中斷，不顯示錯誤
+        if (e.name === 'AbortError' || e.message === 'AbortError') {
+            console.log("使用者中斷了請求");
+        } else {
+            console.error(e);
+            addChatMessage('system', "程式錯誤：" + e.message);
+        }
+    } finally {
+        currentAbortController = null;
     }
 }
 
@@ -1238,7 +1259,8 @@ async function handlePKResult(winner) {
                     document.getElementById('pk-good-title').innerText = newGood.title;
                     document.getElementById('pk-good-content').innerText = newGood.content;
                     
-                    const prompt = `【系統指令：使用者判定鳥事勝出。系統已重新選出一張新的好事卡（如上數據）。請執行模式三：針對這張新卡片，給出全新的比較觀點，嘗試再次說服使用者。】`;
+                    // [修改] 提示指令優化
+                    const prompt = `【系統指令：使用者判定鳥事勝出（鳥事太強）。系統已重新選出一張新的好事卡（如上數據）。請執行模式三：針對這張新卡片，給出全新的比較觀點，嘗試再次說服使用者。】`;
                     await callGeminiChat(prompt, true);
                 } else {
                     addChatMessage('ai', "我翻遍了資料庫，暫時找不到其他好事了... 但請相信，這件鳥事終究會過去的！");
