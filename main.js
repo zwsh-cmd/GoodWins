@@ -37,14 +37,18 @@ function createEditorHTML() {
         appearance: none;
     `;
 
-    // [修改] 加大輸入框字體
+    // [修改] 1. 增加 btn-start-pk 按鈕 (預設 display:none) 
+    // [修改] 2. 調整按鈕區域佈局
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
                 <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
-                <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
+                    <button id="btn-start-pk" style="display:none; background:var(--primary); border:none; color:#FFF; padding:6px 12px; border-radius:16px; font-weight:700; font-size:14px; cursor:pointer;">PK 🔥</button>
+                </div>
             </div>
 
             <input id="input-title" type="text" placeholder="輸入標題..." autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:var(--text-main); margin-bottom:10px;">
@@ -130,7 +134,8 @@ function showSystemMessage(msg) {
 function createPKScreenHTML() {
     if (document.getElementById('pk-screen')) return;
 
-    // [修改] 在好事卡和鳥事卡中間加入「重新PK」按鈕
+    // [修改] 1. 調整卡片內的文字對齊為左對齊 (text-align: left)
+    // [修改] 2. 在內容下方加入展開小箭頭 (class="expand-arrow")
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
@@ -144,12 +149,13 @@ function createPKScreenHTML() {
         <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 15px;">
             
             <div style="display: flex; align-items: stretch; gap: 10px; flex-shrink: 0;">
-                <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s;">
+                <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 5px 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left;">
                     <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
                     <div style="flex: 1;">
-                        <h3 id="pk-bad-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4;">(標題)</h3>
-                        <p id="pk-bad-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
+                        <h3 id="pk-bad-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4; text-align: left;">(標題)</h3>
+                        <p id="pk-bad-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-align: left;">(內容...)</p>
                     </div>
+                    <div class="expand-arrow" style="text-align:center; color:var(--bad-icon); opacity:0.5; padding:5px 0; font-size:10px;">▼</div>
                 </div>
 
                 <div id="btn-re-pk" style="width: 40px; display:none; flex-direction:column; justify-content:center; align-items:center; background:#EEE; border-radius:12px; cursor:pointer; gap:4px;">
@@ -157,12 +163,13 @@ function createPKScreenHTML() {
                     <span style="font-size:12px; font-weight:bold; color:#666; writing-mode: vertical-rl;">重來</span>
                 </div>
 
-                <div id="btn-pk-good" class="action-card" style="flex: 1; cursor: pointer; padding: 20px; background: var(--good-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s;">
+                <div id="btn-pk-good" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 5px 20px; background: var(--good-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left;">
                      <div style="color: var(--good-icon); font-size: 13px; font-weight: 700;">好事</div>
                      <div style="flex: 1;">
-                        <h3 id="pk-good-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4;">(標題)</h3>
-                        <p id="pk-good-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">(內容...)</p>
+                        <h3 id="pk-good-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4; text-align: left;">(標題)</h3>
+                        <p id="pk-good-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-align: left;">(內容...)</p>
                     </div>
+                    <div class="expand-arrow" style="text-align:center; color:var(--good-icon); opacity:0.5; padding:5px 0; font-size:10px;">▼</div>
                 </div>
             </div>
 
@@ -184,6 +191,23 @@ function createPKScreenHTML() {
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', pkHTML);
         
+        // --- [新增] 展開箭頭邏輯 (防止冒泡，切換樣式) ---
+        wrapper.querySelectorAll('.expand-arrow').forEach(arrow => {
+            arrow.addEventListener('click', (e) => {
+                e.stopPropagation(); // 阻止觸發卡片的 PK 判定
+                const p = arrow.previousElementSibling.querySelector('p');
+                if (p) {
+                    if (p.style.webkitLineClamp === 'unset') {
+                        p.style.webkitLineClamp = '3';
+                        arrow.innerText = '▼';
+                    } else {
+                        p.style.webkitLineClamp = 'unset';
+                        arrow.innerText = '▲';
+                    }
+                }
+            });
+        });
+
         // --- 聊天按鈕綁定 ---
         const btnSend = document.getElementById('btn-send-chat');
         const inputChat = document.getElementById('chat-input');
@@ -203,54 +227,41 @@ function createPKScreenHTML() {
             });
         }
 
-        // --- 新增：PK 勝負判定按鈕綁定 ---
+        // --- PK 勝負判定按鈕綁定 ---
         const btnPkBad = document.getElementById('btn-pk-bad');
         const btnPkGood = document.getElementById('btn-pk-good');
 
         if(btnPkBad) {
             btnPkBad.addEventListener('click', () => {
-                // [修改] 如果已經勝利 (isVictory=true)，點擊卡片不應再有反應
                 if (currentPKContext.isVictory) return;
                 handlePKResult('bad');
             });
         }
         if(btnPkGood) {
             btnPkGood.addEventListener('click', () => {
-                // [修改] 如果已經勝利，點擊卡片不應再有反應
                 if (currentPKContext.isVictory) return;
                 handlePKResult('good');
             });
         }
 
-        // --- 新增：重新 PK 按鈕綁定 (針對同一鳥事再戰) ---
+        // --- 重新 PK 按鈕綁定 ---
         const btnRePK = document.getElementById('btn-re-pk');
         if(btnRePK) {
             btnRePK.addEventListener('click', async () => {
                 if(confirm("您已PK勝利，確定要再次PK嗎？")) {
-                    // 1. 重置勝利狀態，讓使用者可以再次投票
                     currentPKContext.isVictory = false;
-                    btnRePK.style.display = 'none'; // 隱藏重來按鈕
-
-                    // 2. 取得目前的好事庫候選人
+                    btnRePK.style.display = 'none'; 
                     try {
                         const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(20));
                         const querySnapshot = await getDocs(q);
-                        
                         if (!querySnapshot.empty) {
                              const docs = querySnapshot.docs;
-                             // 系統訊息告知 (保留歷史)
                              addChatMessage('system', "價值鑑定師正在為你尋找新的觀點...", true);
-
-                             // 3. 呼叫 AI 選牌 (使用目前的 bad)
                              const newGood = await aiPickBestCard(currentPKContext.bad, docs);
-                             
                              if (newGood) {
-                                 // 更新 Context 與 UI
                                  currentPKContext.good = newGood;
                                  document.getElementById('pk-good-title').innerText = newGood.title;
                                  document.getElementById('pk-good-content').innerText = newGood.content;
-                                 
-                                 // 4. 觸發 AI 說服 (隱藏指令)
                                  const prompt = `【系統指令：使用者選擇重新PK。已選出新好事卡（${newGood.title}）。請保留對話記憶，並針對這張新卡片進行新一輪的價值辯論。】`;
                                  await callGeminiChat(prompt, true); 
                              } else {
@@ -302,7 +313,8 @@ const btns = {
     login: document.getElementById('btn-login'),
     saveKey: document.getElementById('btn-save-key'),
     cancelEdit: document.getElementById('btn-cancel-edit'),
-    saveEdit: document.getElementById('btn-save-edit')
+    saveEdit: document.getElementById('btn-save-edit'),
+    startPk: document.getElementById('btn-start-pk') // [新增] 抓取 PK 按鈕
 };
 
 // --- 6. 狀態監聽 ---
@@ -371,8 +383,8 @@ btns.cancelEdit.addEventListener('click', () => {
     screens.editor.classList.add('hidden');
 });
 
-// 儲存邏輯 (支援新增與編輯)
-btns.saveEdit.addEventListener('click', async () => {
+// [修改] 抽離儲存邏輯，支援「僅儲存」與「儲存並PK」兩種行為
+async function handleSaveContent(shouldStartPK = false) {
     const title = inputs.title.value.trim();
     const content = inputs.content.value.trim();
     const score = parseInt(inputs.score.value);
@@ -383,15 +395,17 @@ btns.saveEdit.addEventListener('click', async () => {
         return;
     }
 
-    const originalText = btns.saveEdit.innerText;
-    btns.saveEdit.innerText = "處理中...";
-    btns.saveEdit.disabled = true;
+    // 鎖定按鈕避免重複點擊
+    const btnUsed = shouldStartPK ? btns.startPk : btns.saveEdit;
+    const originalText = btnUsed.innerText;
+    btnUsed.innerText = "處理中...";
+    btnUsed.disabled = true;
 
     try {
         const collectionName = currentMode === 'good' ? 'good_things' : 'bad_things';
         
         if (editingId) {
-            // --- 編輯模式：更新舊資料 ---
+            // --- 編輯模式 ---
             const docRef = doc(db, collectionName, editingId);
             await updateDoc(docRef, {
                 title: title,
@@ -401,7 +415,7 @@ btns.saveEdit.addEventListener('click', async () => {
                 updatedAt: serverTimestamp()
             });
         } else {
-            // --- 新增模式：建立新資料 ---
+            // --- 新增模式 ---
             await addDoc(collection(db, collectionName), {
                 uid: currentUser.uid,
                 title: title,
@@ -414,11 +428,14 @@ btns.saveEdit.addEventListener('click', async () => {
 
         screens.editor.classList.add('hidden'); 
 
-        // 如果是鳥事，無論新增或編輯，都直接開始 PK
-        if (currentMode === 'bad') {
+        // [核心修改] 邏輯分流
+        if (shouldStartPK) {
+            // 按下 PK -> 直接開始 PK
             startPK({ title, content });
         } else {
-            showSystemMessage("✨ 好事已儲存！");
+            // 按下 儲存 -> 顯示提示，不進入 PK
+            const typeText = currentMode === 'good' ? '好事' : '鳥事';
+            showSystemMessage(`✨ ${typeText}已儲存！`);
         }
         
         // 如果倉庫開著，重整列表
@@ -430,10 +447,14 @@ btns.saveEdit.addEventListener('click', async () => {
         console.error("Error:", e);
         showSystemMessage("儲存失敗：" + e.message);
     } finally {
-        btns.saveEdit.innerText = originalText;
-        btns.saveEdit.disabled = false;
+        btnUsed.innerText = originalText;
+        btnUsed.disabled = false;
     }
-});;
+}
+
+// 綁定兩個按鈕
+btns.saveEdit.addEventListener('click', () => handleSaveContent(false)); // 僅儲存
+btns.startPk.addEventListener('click', () => handleSaveContent(true));   // 儲存並 PK
 
 // 全域變數，紀錄當前 PK 的上下文，讓聊天時 AI 知道狀況
 let currentPKContext = { bad: null, good: null };
@@ -895,9 +916,12 @@ function openEditor(mode, data = null) {
     const scoreLabel = document.getElementById('label-score') || inputs.score.previousElementSibling;
     const scoreSelect = inputs.score;
 
-    // [修改] 設定按鈕文字
+    // [修改] 設定按鈕文字與顯示邏輯
     if (mode === 'good') {
+        // 好事：隱藏 PK 按鈕
         btns.saveEdit.innerText = "儲存";
+        btns.startPk.style.display = 'none'; // [修改]
+        
         titleEl.innerText = editingId ? "編輯好事" : "記錄一件好事";
         titleEl.style.color = "var(--good-icon)";
         
@@ -913,7 +937,10 @@ function openEditor(mode, data = null) {
             <option value="5">5分 - 神聖好事 (Divine)</option>
         `;
     } else {
-        btns.saveEdit.innerText = "儲存"; // [修改] 將 PK 改回 儲存 (由使用者決定何時去倉庫PK)
+        // 鳥事：顯示 PK 按鈕
+        btns.saveEdit.innerText = "儲存";
+        btns.startPk.style.display = 'block'; // [修改] 顯示 PK 按鈕
+        
         titleEl.innerText = editingId ? "編輯鳥事" : "記錄一件鳥事";
         titleEl.style.color = "var(--bad-icon)";
         
