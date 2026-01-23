@@ -1015,6 +1015,153 @@ function openEditor(mode, data = null) {
     screens.editor.classList.remove('hidden');
 }
 
+// --- 7.5 設定 (Settings) 功能模組 ---
+async function exportBackup() {
+    try {
+        showSystemMessage("正在打包資料，請稍候...");
+        const backup = {
+            version: 1,
+            date: new Date().toISOString(),
+            users: (await getDocs(collection(db, "users"))).docs.map(d => ({id: d.id, ...d.data()})),
+            good_things: (await getDocs(collection(db, "good_things"))).docs.map(d => ({id: d.id, ...d.data()})),
+            bad_things: (await getDocs(collection(db, "bad_things"))).docs.map(d => ({id: d.id, ...d.data()})),
+            pk_wins: (await getDocs(collection(db, "pk_wins"))).docs.map(d => ({id: d.id, ...d.data()}))
+        };
+        
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `goodwins_backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showSystemMessage("✅ 備份已下載！");
+    } catch(e) {
+        console.error(e);
+        showSystemMessage("匯出失敗：" + e.message);
+    }
+}
+
+async function importBackup(file) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (!data.version) throw new Error("格式錯誤");
+            
+            showSystemMessage("正在還原資料庫...");
+            const restoreCol = async (colName, items) => {
+                if(!items) return;
+                for (const item of items) {
+                    const { id, ...docData } = item;
+                    await setDoc(doc(db, colName, id), docData); // 使用 setDoc 保留原始 ID
+                }
+            };
+
+            await restoreCol("users", data.users);
+            await restoreCol("good_things", data.good_things);
+            await restoreCol("bad_things", data.bad_things);
+            await restoreCol("pk_wins", data.pk_wins);
+
+            showSystemMessage("✅ 資料還原成功！請重新整理頁面。");
+            setTimeout(() => location.reload(), 2000);
+        } catch(err) {
+            showSystemMessage("還原失敗：" + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function createSettingsHTML() {
+    if (document.getElementById('settings-modal')) return;
+
+    const settingsHTML = `
+    <div id="settings-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:300; display: flex; flex-direction: column;">
+        <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
+            <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">設定</div>
+            <button id="btn-close-settings" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">關閉</button>
+        </header>
+        <div style="flex:1; overflow-y:auto; padding:20px;">
+            
+            <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
+                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">👤 帳號資訊</h3>
+                <div id="setting-user-info" style="font-size:14px; color:#666; margin-bottom:10px;">未登入</div>
+            </div>
+
+            <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
+                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">🔑 API Key 設定</h3>
+                <input id="setting-api-key" type="password" placeholder="輸入 Gemini API Key" style="width:100%; padding:10px; border:1px solid #DDD; border-radius:8px; font-size:14px; color:#333; margin-bottom:10px;">
+                <button id="btn-save-setting-key" style="background:var(--primary); color:#FFF; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:bold;">儲存 Key</button>
+            </div>
+
+            <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
+                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">📦 資料備份</h3>
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-export" style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:10px; border-radius:8px; cursor:pointer;">匯出備份</button>
+                    <label style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:10px; border-radius:8px; cursor:pointer; text-align:center;">
+                        匯入備份
+                        <input type="file" id="inp-import" style="display:none;" accept=".json">
+                    </label>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    `;
+    const wrapper = document.getElementById('mobile-wrapper');
+    if(wrapper) wrapper.insertAdjacentHTML('beforeend', settingsHTML);
+
+    // 事件綁定
+    document.getElementById('btn-close-settings').addEventListener('click', () => {
+        document.getElementById('settings-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-save-setting-key').addEventListener('click', () => {
+        const val = document.getElementById('setting-api-key').value.trim();
+        if(val) {
+            sessionStorage.setItem('gemini_key', val);
+            showSystemMessage("API Key 已更新！");
+        }
+    });
+
+    document.getElementById('btn-export').addEventListener('click', exportBackup);
+    document.getElementById('inp-import').addEventListener('change', (e) => {
+        if(e.target.files.length > 0) importBackup(e.target.files[0]);
+    });
+}
+
+// 綁定主畫面設定按鈕 (動態插入到標題列右側)
+function injectSettingsButton() {
+    const header = document.querySelector('header');
+    if (header && !document.getElementById('btn-open-settings')) {
+        // 建立設定按鈕
+        const btn = document.createElement('button');
+        btn.id = 'btn-open-settings';
+        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:#666; stroke-width:2;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+        btn.style.cssText = "background:none; border:none; cursor:pointer; padding:8px;";
+        
+        // 插入到 header 最後面 (或倉庫按鈕旁)
+        header.appendChild(btn);
+
+        btn.addEventListener('click', () => {
+            createSettingsHTML();
+            const modal = document.getElementById('settings-modal');
+            modal.classList.remove('hidden');
+            
+            // 更新 UI 狀態
+            const userEl = document.getElementById('setting-user-info');
+            const keyEl = document.getElementById('setting-api-key');
+            
+            if(currentUser) {
+                userEl.innerHTML = `${currentUser.displayName || '使用者'} <br><span style="font-size:12px; color:#999;">${currentUser.email}</span>`;
+            }
+            keyEl.value = sessionStorage.getItem('gemini_key') || '';
+        });
+    }
+}
+// 初始化設定按鈕
+injectSettingsButton();
+
 // --- 8. 倉庫 (Warehouse) 功能模組 ---
 function createWarehouseHTML() {
     if (document.getElementById('warehouse-modal')) return;
@@ -1026,7 +1173,7 @@ function createWarehouseHTML() {
             <button id="btn-close-warehouse" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">關閉</button>
         </header>
         <div style="padding: 10px 20px; display: flex; gap: 8px; overflow-x: auto;">
-            <button id="tab-wins" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #E0C060; color: #FFF; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
+            <button id="tab-wins" style="flex: 1; min-width:80px; padding: 10px 5px; border: 1px solid #FBC02D; border-radius: 10px; background: #FFF9C4; color: #FBC02D; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
             <button id="tab-good" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">好事庫</button>
             <button id="tab-bad" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">待PK鳥事</button>
         </div>
@@ -1156,7 +1303,7 @@ async function loadWarehouseData(type) {
     // 重置所有 Tab 樣式
     if(tabWins && tabGood && tabBad) {
         [tabWins, tabGood, tabBad].forEach(btn => {
-            btn.style.background = '#EEE'; btn.style.color = '#999';
+            btn.style.background = '#EEE'; btn.style.color = '#999'; btn.style.border = 'none';
         });
     }
 
@@ -1164,8 +1311,8 @@ async function loadWarehouseData(type) {
     let emptyMsg = '';
 
     if (type === 'wins') {
-        // [修改] 降低勝利庫按鈕彩度
-        if(tabWins) { tabWins.style.background = '#E0C060'; tabWins.style.color = '#FFF'; } 
+        // [修改] 勝利庫顏色 (淺黃背景/深黃文字/加邊框)
+        if(tabWins) { tabWins.style.background = '#FFF9C4'; tabWins.style.color = '#FBC02D'; tabWins.style.border = '1px solid #FBC02D'; } 
         collectionName = 'pk_wins';
         emptyMsg = '還沒有勝利紀錄喔！<br>快去 PK 幾場吧！';
     } else if (type === 'good') {
@@ -1201,18 +1348,61 @@ async function loadWarehouseData(type) {
             let displayTitle = data.title;
             let displayContent = data.content;
             
-            // [修改] 按鈕樣式 (圖示化、靠右排列)
-            const btnStyle = `width:36px; height:36px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;`;
+            // [修改] 按鈕樣式 (單色、無背景、SVG圖示)
+            // 定義 SVG icon
+            const iconEdit = `<svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:none; stroke:#888; stroke-width:2;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
+            const iconTrash = `<svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:none; stroke:#888; stroke-width:2;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+            
+            const btnStyle = `width:36px; height:36px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center;`;
 
             if (type === 'good') { 
                 iconColor = 'var(--good-icon)'; 
                 labelText = `等級: ${data.score || 1}`;
                 
-                // [修改] 好事庫：圖示按鈕 (編輯、刪除)，靠右排列
                 actionButtonsHTML = `
                     <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end;">
-                        <button data-action="edit" data-id="${docId}" style="${btnStyle} background:#EEE; color:#666;" title="編輯">✏️</button>
-                        <button data-action="delete" data-id="${docId}" style="${btnStyle} background:#FFEBEE; color:var(--bad-icon);" title="刪除">🗑️</button>
+                        <button data-action="edit" data-id="${docId}" style="${btnStyle}" title="編輯">${iconEdit}</button>
+                        <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
+                    </div>
+                `;
+            }
+            else if (type === 'bad') { 
+                iconColor = 'var(--bad-icon)'; 
+                labelText = `等級: ${data.score || 1}`;
+                
+                let btnDefeatText = "擊敗它";
+                let btnDefeatColor = "var(--primary)";
+                let extraTitle = "";
+                
+                if (data.isDefeated) {
+                    btnDefeatText = "再擊敗";
+                    btnDefeatColor = "#FF9800"; 
+                    extraTitle = `<span style="font-size:12px; color:#4CAF50; margin-left:5px;">(已被擊敗)</span>`;
+                    displayTitle = displayTitle + extraTitle;
+                }
+
+                // [修改] 擊敗按鈕維持原色，編輯/刪除改為單色
+                const defeatBtnStyle = `height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; color:#FFF; background:${btnDefeatColor};`;
+
+                actionButtonsHTML = `
+                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end; align-items:center;">
+                        <button data-action="defeat" data-id="${docId}" data-win-id="${data.lastWinId || ''}" style="${defeatBtnStyle}">${btnDefeatText}</button>
+                        <button data-action="edit" data-id="${docId}" style="${btnStyle}" title="編輯">${iconEdit}</button>
+                        <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
+                    </div>
+                `;
+            }
+            else { 
+                iconColor = '#E0C060'; 
+                labelText = ''; 
+                displayTitle = `擊敗「${data.badTitle}」`;
+                displayContent = `戰友：${data.goodTitle}`;
+
+                // [修改] 回顧按鈕顏色保持淺黃，刪除改為單色
+                actionButtonsHTML = `
+                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end;">
+                        <button data-action="review" data-id="${docId}" style="height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; background:#FFF9C4; color:#FBC02D;">回顧勝利</button>
+                        <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
                     </div>
                 `;
             }
