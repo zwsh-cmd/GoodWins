@@ -1075,7 +1075,6 @@ async function importBackup(file) {
 function createSettingsHTML() {
     if (document.getElementById('settings-modal')) return;
 
-    // [修改] 移除標題 Icon，簡化介面，調整字體大小
     const settingsHTML = `
     <div id="settings-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:300; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -1104,8 +1103,8 @@ function createSettingsHTML() {
             <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
                 <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">資料備份</h3>
                 <div style="display:flex; gap:10px;">
-                    <button id="btn-export" style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:10px; border-radius:8px; cursor:pointer; font-size:14px;">匯出備份</button>
-                    <label style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:10px; border-radius:8px; cursor:pointer; text-align:center; font-size:14px;">
+                    <button id="btn-export" style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">匯出備份</button>
+                    <label style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">
                         匯入備份
                         <input type="file" id="inp-import" style="display:none;" accept=".json">
                     </label>
@@ -1136,7 +1135,6 @@ function createSettingsHTML() {
         if(e.target.files.length > 0) importBackup(e.target.files[0]);
     });
 
-    // [新增] 登出功能
     document.getElementById('btn-logout').addEventListener('click', () => {
         if(confirm("確定要登出嗎？")) {
             signOut(auth).then(() => {
@@ -1147,49 +1145,73 @@ function createSettingsHTML() {
     });
 }
 
-// 綁定主畫面設定按鈕 (動態插入到標題列右側，並調整順序)
+// 綁定主畫面設定按鈕 (動態插入到標題列右側，並調整順序，移除多餘按鈕)
 function injectSettingsButton() {
     const header = document.querySelector('header');
     
-    // 建立設定按鈕 (若不存在)
-    if (header && !document.getElementById('btn-open-settings')) {
-        const btn = document.createElement('button');
-        btn.id = 'btn-open-settings';
-        // 使用齒輪圖示
-        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:#666; stroke-width:2;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
-        btn.style.cssText = "background:none; border:none; cursor:pointer; padding:8px;";
-        
-        // --- [核心修改] 強制調整按鈕順序: 搜尋 -> 倉庫 -> 設定 ---
-        // 先取得現有的按鈕引用
+    if (header) {
+        // 1. 建立或獲取 設定按鈕
+        let btnSettings = document.getElementById('btn-open-settings');
+        if (!btnSettings) {
+            btnSettings = document.createElement('button');
+            btnSettings.id = 'btn-open-settings';
+            // 使用齒輪圖示
+            btnSettings.innerHTML = `<svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:#666; stroke-width:2;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+            btnSettings.style.cssText = "background:none; border:none; cursor:pointer; padding:8px;";
+            
+            btnSettings.addEventListener('click', () => {
+                createSettingsHTML();
+                const modal = document.getElementById('settings-modal');
+                modal.classList.remove('hidden');
+                
+                // 更新 UI 狀態
+                const userAvatar = document.getElementById('setting-user-avatar');
+                const userName = document.getElementById('setting-user-name');
+                const keyEl = document.getElementById('setting-api-key');
+                
+                if(currentUser) {
+                    userAvatar.src = currentUser.photoURL || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0VFRSI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0Ii8+PC9zdmc+'; 
+                    userName.innerText = currentUser.displayName || '使用者';
+                } else {
+                    userAvatar.style.display = 'none';
+                    userName.innerText = '未登入';
+                }
+                keyEl.value = sessionStorage.getItem('gemini_key') || '';
+            });
+        }
+
+        // 2. 獲取其他按鈕
         const btnSearch = document.getElementById('btn-search');
         const btnWarehouse = document.getElementById('btn-warehouse-entry');
-        
-        // 依序將它們 append 到 header (append 會將元素移到容器最末端)
-        // 這樣就能保證順序為：(其他元素) ... 搜尋 -> 倉庫 -> 設定
-        if(btnSearch) header.appendChild(btnSearch);
-        if(btnWarehouse) header.appendChild(btnWarehouse);
-        header.appendChild(btn);
 
-        // 設定按鈕點擊事件
-        btn.addEventListener('click', () => {
-            createSettingsHTML();
-            const modal = document.getElementById('settings-modal');
-            modal.classList.remove('hidden');
-            
-            // 更新 UI 狀態
-            const userAvatar = document.getElementById('setting-user-avatar');
-            const userName = document.getElementById('setting-user-name');
-            const keyEl = document.getElementById('setting-api-key');
-            
-            if(currentUser) {
-                userAvatar.src = currentUser.photoURL || 'data:image/svg+xml;base64,...'; // 若無圖片可放預設
-                userName.innerText = currentUser.displayName || '使用者';
-            } else {
-                userAvatar.style.display = 'none';
-                userName.innerText = '未登入';
+        // 3. [核心修改] 清理 Header 中的舊按鈕 (包含那個沒用的深色齒輪)
+        // 策略：移除所有不是搜尋、倉庫、設定的按鈕
+        const existingButtons = header.querySelectorAll('button');
+        existingButtons.forEach(btn => {
+            if (btn.id !== 'btn-search' && btn.id !== 'btn-warehouse-entry' && btn.id !== 'btn-open-settings') {
+                btn.remove(); // 移除不明按鈕
             }
-            keyEl.value = sessionStorage.getItem('gemini_key') || '';
         });
+
+        // 4. 建立右側容器 (如果不存在)，讓按鈕緊密靠右
+        let rightContainer = document.getElementById('header-right-actions');
+        if (!rightContainer) {
+            rightContainer = document.createElement('div');
+            rightContainer.id = 'header-right-actions';
+            rightContainer.style.cssText = "display:flex; align-items:center; gap:5px; margin-left:auto;";
+            header.appendChild(rightContainer);
+        }
+
+        // 5. 依序放入按鈕 (搜尋 -> 倉庫 -> 設定)
+        if(btnSearch) {
+            btnSearch.style.margin = "0"; // 重置 margin 確保 gap 生效
+            rightContainer.appendChild(btnSearch);
+        }
+        if(btnWarehouse) {
+            btnWarehouse.style.margin = "0";
+            rightContainer.appendChild(btnWarehouse);
+        }
+        rightContainer.appendChild(btnSettings);
     }
 }
 // 初始化設定按鈕
