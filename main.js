@@ -1,6 +1,6 @@
 // --- 1. 引入 Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 // --- 2. 設定碼 ---
@@ -1075,6 +1075,7 @@ async function importBackup(file) {
 function createSettingsHTML() {
     if (document.getElementById('settings-modal')) return;
 
+    // [修改] 移除標題 Icon，簡化介面，調整字體大小
     const settingsHTML = `
     <div id="settings-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:300; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -1084,21 +1085,27 @@ function createSettingsHTML() {
         <div style="flex:1; overflow-y:auto; padding:20px;">
             
             <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
-                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">👤 帳號資訊</h3>
-                <div id="setting-user-info" style="font-size:14px; color:#666; margin-bottom:10px;">未登入</div>
+                <h3 style="margin:0 0 15px 0; font-size:16px; color:var(--text-main);">帳號資訊</h3>
+                <div id="setting-user-container" style="display:flex; align-items:center; justify-content:space-between;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <img id="setting-user-avatar" src="" style="width:40px; height:40px; border-radius:50%; background:#EEE; object-fit:cover;">
+                        <span id="setting-user-name" style="font-size:16px; font-weight:bold; color:#333;">未登入</span>
+                    </div>
+                    <button id="btn-logout" style="background:#FFF; border:1px solid #DDD; color:#666; padding:6px 12px; border-radius:6px; font-size:13px; cursor:pointer;">登出</button>
+                </div>
             </div>
 
             <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
-                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">🔑 API Key 設定</h3>
+                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">API Key 設定</h3>
                 <input id="setting-api-key" type="password" placeholder="輸入 Gemini API Key" style="width:100%; padding:10px; border:1px solid #DDD; border-radius:8px; font-size:14px; color:#333; margin-bottom:10px;">
-                <button id="btn-save-setting-key" style="background:var(--primary); color:#FFF; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:bold;">儲存 Key</button>
+                <button id="btn-save-setting-key" style="background:var(--primary); color:#FFF; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:15px;">儲存</button>
             </div>
 
             <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
-                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">📦 資料備份</h3>
+                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">資料備份</h3>
                 <div style="display:flex; gap:10px;">
-                    <button id="btn-export" style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:10px; border-radius:8px; cursor:pointer;">匯出備份</button>
-                    <label style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:10px; border-radius:8px; cursor:pointer; text-align:center;">
+                    <button id="btn-export" style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:10px; border-radius:8px; cursor:pointer; font-size:14px;">匯出備份</button>
+                    <label style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:10px; border-radius:8px; cursor:pointer; text-align:center; font-size:14px;">
                         匯入備份
                         <input type="file" id="inp-import" style="display:none;" accept=".json">
                     </label>
@@ -1120,7 +1127,7 @@ function createSettingsHTML() {
         const val = document.getElementById('setting-api-key').value.trim();
         if(val) {
             sessionStorage.setItem('gemini_key', val);
-            showSystemMessage("API Key 已更新！");
+            showSystemMessage("API Key 已儲存！");
         }
     });
 
@@ -1128,32 +1135,58 @@ function createSettingsHTML() {
     document.getElementById('inp-import').addEventListener('change', (e) => {
         if(e.target.files.length > 0) importBackup(e.target.files[0]);
     });
+
+    // [新增] 登出功能
+    document.getElementById('btn-logout').addEventListener('click', () => {
+        if(confirm("確定要登出嗎？")) {
+            signOut(auth).then(() => {
+                showSystemMessage("已登出");
+                setTimeout(() => location.reload(), 1000);
+            }).catch(e => showSystemMessage(e.message));
+        }
+    });
 }
 
-// 綁定主畫面設定按鈕 (動態插入到標題列右側)
+// 綁定主畫面設定按鈕 (動態插入到標題列右側，並調整順序)
 function injectSettingsButton() {
     const header = document.querySelector('header');
+    
+    // 建立設定按鈕 (若不存在)
     if (header && !document.getElementById('btn-open-settings')) {
-        // 建立設定按鈕
         const btn = document.createElement('button');
         btn.id = 'btn-open-settings';
+        // 使用齒輪圖示
         btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:#666; stroke-width:2;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
         btn.style.cssText = "background:none; border:none; cursor:pointer; padding:8px;";
         
-        // 插入到 header 最後面 (或倉庫按鈕旁)
+        // --- [核心修改] 強制調整按鈕順序: 搜尋 -> 倉庫 -> 設定 ---
+        // 先取得現有的按鈕引用
+        const btnSearch = document.getElementById('btn-search');
+        const btnWarehouse = document.getElementById('btn-warehouse-entry');
+        
+        // 依序將它們 append 到 header (append 會將元素移到容器最末端)
+        // 這樣就能保證順序為：(其他元素) ... 搜尋 -> 倉庫 -> 設定
+        if(btnSearch) header.appendChild(btnSearch);
+        if(btnWarehouse) header.appendChild(btnWarehouse);
         header.appendChild(btn);
 
+        // 設定按鈕點擊事件
         btn.addEventListener('click', () => {
             createSettingsHTML();
             const modal = document.getElementById('settings-modal');
             modal.classList.remove('hidden');
             
             // 更新 UI 狀態
-            const userEl = document.getElementById('setting-user-info');
+            const userAvatar = document.getElementById('setting-user-avatar');
+            const userName = document.getElementById('setting-user-name');
             const keyEl = document.getElementById('setting-api-key');
             
             if(currentUser) {
-                userEl.innerHTML = `${currentUser.displayName || '使用者'} <br><span style="font-size:12px; color:#999;">${currentUser.email}</span>`;
+                userAvatar.src = currentUser.photoURL || 'data:image/svg+xml;base64,...'; // 若無圖片可放預設
+                userName.innerText = currentUser.displayName || '使用者';
+            } else {
+                userAvatar.style.display = 'none';
+                userName.innerText = '未登入';
             }
             keyEl.value = sessionStorage.getItem('gemini_key') || '';
         });
