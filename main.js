@@ -1311,7 +1311,7 @@ async function loadWarehouseData(type) {
     let emptyMsg = '';
 
     if (type === 'wins') {
-        // [修改] 勝利庫顏色 (淺黃背景/深黃文字/加邊框)
+        // [修正] 勝利庫顏色 (淺黃背景/深黃文字/加邊框)
         if(tabWins) { tabWins.style.background = '#FFF9C4'; tabWins.style.color = '#FBC02D'; tabWins.style.border = '1px solid #FBC02D'; } 
         collectionName = 'pk_wins';
         emptyMsg = '還沒有勝利紀錄喔！<br>快去 PK 幾場吧！';
@@ -1348,8 +1348,7 @@ async function loadWarehouseData(type) {
             let displayTitle = data.title;
             let displayContent = data.content;
             
-            // [修改] 按鈕樣式 (單色、無背景、SVG圖示)
-            // 定義 SVG icon
+            // [修正] 按鈕樣式 (單色、無背景、SVG圖示)
             const iconEdit = `<svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:none; stroke:#888; stroke-width:2;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
             const iconTrash = `<svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:none; stroke:#888; stroke-width:2;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
             
@@ -1381,7 +1380,6 @@ async function loadWarehouseData(type) {
                     displayTitle = displayTitle + extraTitle;
                 }
 
-                // [修改] 擊敗按鈕維持原色，編輯/刪除改為單色
                 const defeatBtnStyle = `height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; color:#FFF; background:${btnDefeatColor};`;
 
                 actionButtonsHTML = `
@@ -1398,53 +1396,10 @@ async function loadWarehouseData(type) {
                 displayTitle = `擊敗「${data.badTitle}」`;
                 displayContent = `戰友：${data.goodTitle}`;
 
-                // [修改] 回顧按鈕顏色保持淺黃，刪除改為單色
                 actionButtonsHTML = `
                     <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end;">
                         <button data-action="review" data-id="${docId}" style="height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; background:#FFF9C4; color:#FBC02D;">回顧勝利</button>
                         <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
-                    </div>
-                `;
-            }
-            else if (type === 'bad') { 
-                iconColor = 'var(--bad-icon)'; 
-                labelText = `等級: ${data.score || 1}`;
-                
-                // 判斷是否已被擊敗
-                let btnDefeatText = "擊敗它";
-                let btnDefeatColor = "var(--primary)";
-                let extraTitle = "";
-                
-                if (data.isDefeated) {
-                    btnDefeatText = "再擊敗";
-                    btnDefeatColor = "#FF9800"; // 橘色
-                    extraTitle = `<span style="font-size:12px; color:#4CAF50; margin-left:5px;">(已被擊敗)</span>`;
-                    displayTitle = displayTitle + extraTitle;
-                }
-
-                // [修改] 鳥事庫：擊敗(文字按鈕) + 圖示(編輯、刪除)，靠右排列
-                // 擊敗按鈕保持文字，但樣式調整為與圖示高度一致的圓角按鈕
-                const defeatBtnStyle = `height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; color:#FFF; background:${btnDefeatColor};`;
-
-                actionButtonsHTML = `
-                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end; align-items:center;">
-                        <button data-action="defeat" data-id="${docId}" data-win-id="${data.lastWinId || ''}" style="${defeatBtnStyle}">${btnDefeatText}</button>
-                        <button data-action="edit" data-id="${docId}" style="${btnStyle} background:#EEE; color:#666;" title="編輯">✏️</button>
-                        <button data-action="delete" data-id="${docId}" style="${btnStyle} background:#FFEBEE; color:var(--bad-icon);" title="刪除">🗑️</button>
-                    </div>
-                `;
-            }
-            else { 
-                iconColor = '#E0C060'; // [修改] 配合降低彩度
-                labelText = ''; // [修改] 移除「PK 勝利」文字標籤
-                displayTitle = `擊敗「${data.badTitle}」`;
-                displayContent = `戰友：${data.goodTitle}`;
-
-                // [修改] 勝利庫：回顧(文字) + 刪除(圖示)，靠右排列
-                actionButtonsHTML = `
-                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end;">
-                        <button data-action="review" data-id="${docId}" style="height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; background:#FFF9C4; color:#FBC02D;">回顧勝利</button>
-                        <button data-action="delete" data-id="${docId}" style="${btnStyle} background:#FFEBEE; color:var(--bad-icon);" title="刪除">🗑️</button>
                     </div>
                 `;
             }
