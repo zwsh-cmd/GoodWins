@@ -129,7 +129,7 @@ function createGlobalComponents() {
                 <div id="confirm-msg" style="font-size: 15px; color: var(--text-main); line-height: 1.6; white-space: pre-line; font-weight:bold;"></div>
                 <div style="display:flex; gap:10px;">
                     <button id="btn-confirm-cancel" style="flex:1; background: #F5F5F5; color: #666; border: none; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;">取消</button>
-                    <button id="btn-confirm-ok" style="flex:1; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;">確定離開</button>
+                    <button id="btn-confirm-ok" style="flex:1; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;">確定</button>
                 </div>
             </div>
         </div>
@@ -147,8 +147,8 @@ function showSystemMessage(msg) {
     } else { alert(msg); }
 }
 
-// [新增] 顯示確認視窗，回傳 Promise (true=確定, false=取消)
-function showConfirmMessage(msg) {
+// [新增] 顯示確認視窗，支援自訂按鈕文字
+function showConfirmMessage(msg, okText = "確定", cancelText = "取消") {
     return new Promise((resolve) => {
         const confirmEl = document.getElementById('system-confirm');
         const msgEl = document.getElementById('confirm-msg');
@@ -158,6 +158,16 @@ function showConfirmMessage(msg) {
         if(!confirmEl) { resolve(confirm(msg)); return; }
 
         msgEl.innerText = msg;
+        btnOk.innerText = okText;         
+        btnCancel.innerText = cancelText; 
+        
+        // 若為刪除操作，按鈕改紅色以示警示
+        if(okText.includes("刪除")) {
+            btnOk.style.background = "#FF5252";
+        } else {
+            btnOk.style.background = "var(--primary)";
+        }
+
         confirmEl.classList.remove('hidden');
 
         const handleOk = () => {
@@ -1286,7 +1296,116 @@ function openEditor(mode, data = null) {
     screens.editor.classList.remove('hidden');
 }
 
-// --- 7.5 設定 (Settings) 功能模組 ---
+// --- 7.5 設定與垃圾桶功能 ---
+
+// 垃圾桶 helper：移動到垃圾桶
+async function moveToTrash(collectionName, docId) {
+    try {
+        const ref = doc(db, collectionName, docId);
+        const snap = await getDoc(ref);
+        if(snap.exists()){
+            await addDoc(collection(db, "trash_bin"), {
+                originCol: collectionName,
+                originId: docId,
+                data: snap.data(),
+                delTime: serverTimestamp()
+            });
+            await deleteDoc(ref);
+            return true;
+        }
+        return false;
+    } catch(e) {
+        console.error("Trash Error", e);
+        return false;
+    }
+}
+
+// 垃圾桶 helper：還原
+async function restoreTrash(trashId) {
+    try {
+        const ref = doc(db, "trash_bin", trashId);
+        const snap = await getDoc(ref);
+        if(snap.exists()){
+            const { originCol, originId, data } = snap.data();
+            // 還原到原始位置 (使用 setDoc 指定 ID)
+            await setDoc(doc(db, originCol, originId), data);
+            await deleteDoc(ref);
+            return true;
+        }
+        return false;
+    } catch(e) {
+        console.error("Restore Error", e);
+        return false;
+    }
+}
+
+// 產生垃圾桶畫面
+async function createTrashHTML() {
+    const trashHTML = `
+    <div id="trash-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:350; display: flex; flex-direction: column;">
+        <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
+            <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">垃圾桶</div>
+            <button id="btn-close-trash" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">關閉</button>
+        </header>
+        <div id="trash-list" style="flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:10px;">
+            <div style="text-align:center; color:#CCC; margin-top:50px;">載入中...</div>
+        </div>
+    </div>
+    `;
+    const wrapper = document.getElementById('mobile-wrapper');
+    if(!document.getElementById('trash-modal')) wrapper.insertAdjacentHTML('beforeend', trashHTML);
+
+    document.getElementById('btn-close-trash').addEventListener('click', () => {
+        document.getElementById('trash-modal').classList.add('hidden');
+    });
+
+    const listEl = document.getElementById('trash-list');
+    listEl.innerHTML = '';
+
+    const q = query(collection(db, "trash_bin"), orderBy("delTime", "desc"), limit(50));
+    const snap = await getDocs(q);
+
+    if(snap.empty) {
+        listEl.innerHTML = '<div style="text-align:center; color:#CCC; margin-top:50px;">垃圾桶是空的</div>';
+        return;
+    }
+
+    snap.forEach(d => {
+        const item = d.data();
+        let originName = '未知';
+        if(item.originCol === 'pk_wins') originName = 'PK勝利';
+        else if(item.originCol === 'good_things') originName = '好事';
+        else if(item.originCol === 'bad_things') originName = '鳥事';
+
+        const title = item.data.title || item.data.goodTitle || '無標題';
+        const score = item.data.score || 1;
+        
+        const div = document.createElement('div');
+        div.style.cssText = "background:#FFF; padding:15px; border-radius:12px; border:1px solid #EEE; display:flex; justify-content:space-between; align-items:center;";
+        div.innerHTML = `
+            <div>
+                <div style="font-size:12px; color:#999; margin-bottom:4px;">${originName} <span style="margin-left:5px; color:#CCC;">|</span> 等級: ${score}</div>
+                <div style="font-weight:bold; color:#333;">${title}</div>
+            </div>
+            <button class="btn-restore" data-id="${d.id}" style="background:#E3F2FD; color:#2196F3; border:none; padding:6px 12px; border-radius:15px; font-size:12px; cursor:pointer;">還原</button>
+        `;
+        listEl.appendChild(div);
+    });
+
+    listEl.querySelectorAll('.btn-restore').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = e.target.dataset.id;
+            if(confirm("確定要還原此項目？")) {
+                await restoreTrash(id);
+                e.target.closest('div').remove();
+                showSystemMessage("已還原");
+            }
+        });
+    });
+
+    document.getElementById('trash-modal').classList.remove('hidden');
+}
+
 async function exportBackup() {
     try {
         showSystemMessage("正在打包資料，請稍候...");
@@ -1372,10 +1491,11 @@ function createSettingsHTML() {
             </div>
 
             <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
-                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">資料備份</h3>
-                <div style="display:flex; gap:10px;">
-                    <button id="btn-export" style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">匯出備份</button>
-                    <label style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;">
+                <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">資料管理</h3>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button id="btn-open-trash-list" style="width:100%; background:#FFF3E0; color:#E65100; border:1px solid #FFE0B2; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:bold; margin-bottom:10px;">🗑️ 開啟垃圾桶</button>
+                    <button id="btn-export" style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:12px; border-radius:8px; cursor:pointer; font-size:15px;">匯出備份</button>
+                    <label style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; text-align:center;">
                         匯入備份
                         <input type="file" id="inp-import" style="display:none;" accept=".json">
                     </label>
@@ -1388,7 +1508,6 @@ function createSettingsHTML() {
     const wrapper = document.getElementById('mobile-wrapper');
     if(wrapper) wrapper.insertAdjacentHTML('beforeend', settingsHTML);
 
-    // 事件綁定
     document.getElementById('btn-close-settings').addEventListener('click', () => {
         history.back();
     });
@@ -1400,6 +1519,8 @@ function createSettingsHTML() {
             showSystemMessage("API Key 已儲存！");
         }
     });
+
+    document.getElementById('btn-open-trash-list').addEventListener('click', createTrashHTML);
 
     document.getElementById('btn-export').addEventListener('click', exportBackup);
     document.getElementById('inp-import').addEventListener('change', (e) => {
@@ -1533,9 +1654,11 @@ function createWarehouseHTML() {
     document.getElementById('tab-good').addEventListener('click', () => { resetFilter(); loadWarehouseData('good'); });
     document.getElementById('tab-bad').addEventListener('click', () => { resetFilter(); loadWarehouseData('bad'); });
 
+    // [新增] 篩選按鈕事件
     wrapper.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             currentWarehouseScoreFilter = parseInt(e.target.dataset.score);
+            // 找出目前的 Tab
             const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
                                document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
             loadWarehouseData(currentTab);
@@ -1545,6 +1668,7 @@ function createWarehouseHTML() {
     const listEl = document.getElementById('warehouse-list');
     listEl.addEventListener('click', async (e) => {
         const target = e.target;
+        // [修正] 往上尋找最近的 button，確保點擊 SVG 或 path 也能觸發
         const btn = target.closest('button');
         if (!btn) return;
 
@@ -1564,15 +1688,16 @@ function createWarehouseHTML() {
                     confirmMsg = '只刪除勝利紀錄與其對話紀錄，好事卡/鳥事卡仍保存在各倉庫中。';
                 }
 
-                const confirmed = await showConfirmMessage(confirmMsg);
+                // [修改] 使用自訂按鈕文字
+                const confirmed = await showConfirmMessage(confirmMsg, "確定刪除", "取消");
                 if (!confirmed) return;
 
                 if (isWinTab) {
-                     // 1. 刪除勝利紀錄
+                     // 1. 處理勝利紀錄
                      const winDoc = await getDoc(doc(db, 'pk_wins', id));
                      if (winDoc.exists()) {
                          const data = winDoc.data();
-                         // 2. 還原鳥事狀態並「清除對話紀錄」
+                         // 2. 清除對應鳥事卡的對話紀錄，並重置狀態
                          if (data.originalBadId) {
                              const badRef = doc(db, 'bad_things', data.originalBadId);
                              await updateDoc(badRef, {
@@ -1583,15 +1708,17 @@ function createWarehouseHTML() {
                              });
                          }
                      }
-                     await deleteDoc(doc(db, 'pk_wins', id));
+                     // 3. 移動到垃圾桶 (取代直接刪除)
+                     await moveToTrash('pk_wins', id);
                 } else {
-                    // 一般刪除
+                    // 一般刪除：移動到垃圾桶
                     const isBadTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)');
                     const collectionName = isBadTab ? 'bad_things' : 'good_things';
-                    await deleteDoc(doc(db, collectionName, id));
+                    await moveToTrash(collectionName, id);
                 }
                 
                 btn.closest('.card-item').remove();
+                showSystemMessage("已移至垃圾桶");
 
             } else if (action === 'edit') {
                 const isGoodTab = document.getElementById('tab-good').style.background.includes('var(--good-light)');
@@ -1603,6 +1730,7 @@ function createWarehouseHTML() {
                 }
             } else if (action === 'defeat') {
                 document.getElementById('warehouse-modal').classList.add('hidden');
+                
                 if (winId) {
                     const winSnap = await getDoc(doc(db, 'pk_wins', winId));
                     if (winSnap.exists()) {
@@ -1610,6 +1738,7 @@ function createWarehouseHTML() {
                         return;
                     }
                 }
+                
                 const docSnap = await getDoc(doc(db, 'bad_things', id));
                 if (docSnap.exists()) {
                     startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things');
