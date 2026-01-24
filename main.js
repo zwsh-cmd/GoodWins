@@ -252,6 +252,15 @@ function createPKScreenHTML() {
         if(btnRePK) {
             btnRePK.addEventListener('click', async () => {
                 if(confirm("確定要重新發起 PK 挑戰嗎？")) {
+                    
+                    // [新增] 關鍵邏輯：切換身分證
+                    // 從「回顧模式 (pk_wins)」強制切換回「戰鬥模式 (bad_things)」
+                    // 這樣如果中途離開，系統才會執行「失敗歸檔」邏輯
+                    if (currentPKContext.collection === 'pk_wins' && currentPKContext.originalBadId) {
+                        currentPKContext.collection = 'bad_things';
+                        currentPKContext.docId = currentPKContext.originalBadId;
+                    }
+
                     currentPKContext.isVictory = false; // 重置勝利狀態
                     btnRePK.style.display = 'none'; 
                     
@@ -680,7 +689,8 @@ async function startPK(data, collectionSource) {
         docId: data.id,
         collection: collectionSource,
         // [新增] 如果是回顧勝利，記錄勝利ID，方便後續更新同一筆
-        winId: collectionSource === 'pk_wins' ? data.id : null, 
+        winId: collectionSource === 'pk_wins' ? data.id : null,
+        originalBadId: data.originalBadId || null, // [新增] 保存原始鳥事 ID，供重來按鈕切換身分使用
         bad: null,
         good: null,
         chatLogs: data.chatLogs || [],
