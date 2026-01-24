@@ -424,6 +424,8 @@ function createPKScreenHTML() {
                                  currentPKContext.good = newGood;
                                  document.getElementById('pk-good-title').innerText = newGood.title;
                                  document.getElementById('pk-good-content').innerText = newGood.content;
+                                 // [補漏] 顯示好事等級
+                                 document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
                                  
                                  // 3. AI 進行新一輪說明 (絕對不提舊事)
                                  const prompt = `【系統指令：使用者選擇重來一次。目前已選出新好事卡（標題：${newGood.title}）。請保留之前的對話脈絡，但**絕對不要**提及或回應上一次的PK結果。請針對這張新卡片重新執行模式一：進行價值辯論。】`;
@@ -971,8 +973,12 @@ async function startPK(data, collectionSource, options = {}) {
         
         document.getElementById('pk-bad-title').innerText = data.badTitle;
         document.getElementById('pk-bad-content').innerText = data.badContent || "(已克服的鳥事)";
+        // [新增] 顯示等級 (若舊資料無 score 則預設 1)
+        document.getElementById('pk-bad-header').innerText = `鳥事 (Lv.${data.badScore || 1})`;
+
         document.getElementById('pk-good-title').innerText = data.goodTitle;
         document.getElementById('pk-good-content').innerText = data.goodContent || "(獲勝的好事)";
+        document.getElementById('pk-good-header').innerText = `好事 (Lv.${data.goodScore || 1})`;
         
         currentPKContext.bad = { title: data.badTitle, content: data.badContent };
         currentPKContext.good = { title: data.goodTitle, content: data.goodContent };
@@ -2239,8 +2245,13 @@ async function handlePKResult(winner) {
                     uid: currentUser.uid,
                     badTitle: currentPKContext.bad?.title || "未知鳥事",
                     badContent: currentPKContext.bad?.content || "", 
+                    // [新增] 儲存等級以便回顧
+                    badScore: parseInt(currentPKContext.bad?.score) || 1,
+
                     goodTitle: currentPKContext.good?.title || "未知好事",
                     goodContent: currentPKContext.good?.content || "", 
+                    goodScore: parseInt(currentPKContext.good?.score) || 1,
+
                     score: scoreToAdd,
                     chatLogs: currentPKContext.chatLogs,
                     originalBadId: currentPKContext.collection === 'bad_things' ? currentPKContext.docId : null,
