@@ -23,7 +23,7 @@ const provider = new GoogleAuthProvider();
 function createEditorHTML() {
     if (document.getElementById('editor-modal')) return;
 
-    // [修改] 下拉選單文字加大至 19px
+    // [修改] 下拉選單文字微調至 17px
     const selectStyle = `
         width:100%; 
         padding:12px 40px 12px 12px; 
@@ -31,14 +31,15 @@ function createEditorHTML() {
         border-radius:12px; 
         background:#FAFAFA url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235A5A5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 16px center; 
         background-size: 16px;
-        font-size:19px; 
+        font-size:17px; 
         color:var(--text-main); 
         outline:none; 
         -webkit-appearance: none; 
         appearance: none;
     `;
 
-    // [修改] 加入 style 標籤強制設定 option 字體大小
+    // [修改] 1. placeholder 顏色改為 #E0E0E0 (更淺)
+    // [修改] 2. select option 字體同步調整為 17px
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
@@ -49,12 +50,13 @@ function createEditorHTML() {
             </div>
 
             <style>
-                select option { font-size: 19px; }
+                #input-title::placeholder, #input-content::placeholder { color: #E0E0E0; opacity: 1; }
+                select option { font-size: 17px; }
             </style>
 
-            <input id="input-title" type="text" autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:#666; margin-bottom:10px;">
+            <input id="input-title" type="text" placeholder="標題" autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:#666; margin-bottom:10px;">
             
-            <textarea id="input-content" name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
+            <textarea id="input-content" placeholder="內容" name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
             
             <div style="padding:10px 0; display:flex; justify-content:flex-end;">
                 <button id="btn-start-pk" style="display:none; background:transparent; border:1px solid var(--primary); color:var(--primary); padding:6px 20px; border-radius:50px; font-weight:700; font-size:14px; cursor:pointer;">開始PK</button>
@@ -1419,7 +1421,6 @@ async function restoreTrash(trashId) {
 
 // 產生垃圾桶畫面
 async function createTrashHTML() {
-    // 定義還原 Icon
     const iconRestore = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#2196F3; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>`;
 
     const trashHTML = `
@@ -1436,8 +1437,9 @@ async function createTrashHTML() {
     const wrapper = document.getElementById('mobile-wrapper');
     if(!document.getElementById('trash-modal')) wrapper.insertAdjacentHTML('beforeend', trashHTML);
 
+    // [修改] 使用 history.back() 返回上一層 (設定頁)
     document.getElementById('btn-close-trash').addEventListener('click', () => {
-        document.getElementById('trash-modal').classList.add('hidden');
+        history.back();
     });
 
     const listEl = document.getElementById('trash-list');
@@ -1477,7 +1479,6 @@ async function createTrashHTML() {
 
         const btnStyle = `width:28px; height:28px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;`;
         
-        // [修改] 樣式與搜尋結果一致
         const div = document.createElement('div');
         div.className = "trash-item";
         div.style.cssText = `background:#FFF; padding:15px; border-radius:12px; border:1px solid #F0F0F0; border-left:4px solid ${color}; display:flex; align-items:center; gap:10px;`;
@@ -1497,7 +1498,10 @@ async function createTrashHTML() {
     listEl.querySelectorAll('.btn-restore').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const id = e.target.closest('button').dataset.id;
-            if(confirm("確定要還原此項目？")) {
+            
+            // [修改] 使用風格提示窗
+            const confirmRestore = await showConfirmMessage("確定要還原此項目？", "還原", "取消");
+            if(confirmRestore) {
                 await restoreTrash(id);
                 e.target.closest('.trash-item').remove();
                 showSystemMessage("已還原");
@@ -1567,7 +1571,6 @@ async function importBackup(file) {
 function createSettingsHTML() {
     if (document.getElementById('settings-modal')) return;
 
-    // [修改] 移除垃圾桶按鈕前的 Emoji
     const settingsHTML = `
     <div id="settings-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:300; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -1623,15 +1626,21 @@ function createSettingsHTML() {
         }
     });
 
-    document.getElementById('btn-open-trash-list').addEventListener('click', createTrashHTML);
+    // [修改] 開啟垃圾桶時，加入 pushState 以建立導航階層
+    document.getElementById('btn-open-trash-list').addEventListener('click', () => {
+        history.pushState({ tier: 'trash' }, '', '');
+        createTrashHTML();
+    });
 
     document.getElementById('btn-export').addEventListener('click', exportBackup);
     document.getElementById('inp-import').addEventListener('change', (e) => {
         if(e.target.files.length > 0) importBackup(e.target.files[0]);
     });
 
-    document.getElementById('btn-logout').addEventListener('click', () => {
-        if(confirm("確定要登出嗎？")) {
+    // [修改] 登出按鈕使用風格提示窗
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+        const confirmLogout = await showConfirmMessage("確定要登出嗎？", "登出", "取消");
+        if(confirmLogout) {
             signOut(auth).then(() => {
                 showSystemMessage("已登出");
                 setTimeout(() => location.reload(), 1000);
@@ -2245,14 +2254,17 @@ function setupNavigation() {
         const settingsModal = document.getElementById('settings-modal');
         if(settingsModal) settingsModal.classList.add('hidden');
 
+        // [新增] 隱藏垃圾桶
+        const trashModal = document.getElementById('trash-modal');
+        if(trashModal) trashModal.classList.add('hidden');
+
         // B. 根據 tier 顯示對應視窗
         if (!tier || tier === 'home') {
-            // 回到首頁 (上面已經全部隱藏了，所以這裡不用做什麼)
+            // 回到首頁
         } 
         else if (tier === 'warehouse') {
             if(screens.warehouse) {
                 screens.warehouse.classList.remove('hidden');
-                // 回到倉庫時，重新整理目前的分頁資料 (確保資料同步)
                 const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
                                    document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
                 loadWarehouseData(currentTab);
@@ -2267,6 +2279,11 @@ function setupNavigation() {
         else if (tier === 'settings') {
             if(settingsModal) settingsModal.classList.remove('hidden');
         } 
+        else if (tier === 'trash') {
+            // [新增] 垃圾桶階層 (需確保設定頁也顯示，營造堆疊感，或者直接顯示垃圾桶)
+            // 這裡選擇直接顯示垃圾桶，但要確保如果使用者重新整理，createTrashHTML 能運作
+            createTrashHTML();
+        }
         else if (tier === 'pk') {
             if(screens.pk) screens.pk.classList.remove('hidden');
         }
