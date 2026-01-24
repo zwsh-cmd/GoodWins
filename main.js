@@ -1630,7 +1630,7 @@ function createSettingsHTML() {
             <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
                 <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">API Key 設定</h3>
                 <input id="setting-api-key" type="password" placeholder="輸入 Gemini API Key" style="width:100%; padding:10px; border:1px solid #DDD; border-radius:8px; font-size:14px; color:#333; margin-bottom:10px;">
-                <button id="btn-save-setting-key" style="background:var(--primary); color:#FFF; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:15px;">儲存</button>
+                <button id="btn-save-setting-key" style="background:#FFF; border:1px solid #DDD; color:#666; padding:6px 12px; border-radius:6px; font-size:13px; cursor:pointer;">儲存</button>
             </div>
 
             <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
