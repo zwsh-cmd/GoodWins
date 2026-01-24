@@ -1533,11 +1533,9 @@ function createWarehouseHTML() {
     document.getElementById('tab-good').addEventListener('click', () => { resetFilter(); loadWarehouseData('good'); });
     document.getElementById('tab-bad').addEventListener('click', () => { resetFilter(); loadWarehouseData('bad'); });
 
-    // [新增] 篩選按鈕事件
     wrapper.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             currentWarehouseScoreFilter = parseInt(e.target.dataset.score);
-            // 找出目前的 Tab
             const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
                                document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
             loadWarehouseData(currentTab);
@@ -1547,7 +1545,6 @@ function createWarehouseHTML() {
     const listEl = document.getElementById('warehouse-list');
     listEl.addEventListener('click', async (e) => {
         const target = e.target;
-        // [修正] 往上尋找最近的 button，確保點擊 SVG 或 path 也能觸發
         const btn = target.closest('button');
         if (!btn) return;
 
@@ -1559,31 +1556,43 @@ function createWarehouseHTML() {
         
         try {
             if (action === 'delete') {
-                if(confirm('確定要刪除這張卡片嗎？')) {
-                    const isWinTab = document.getElementById('tab-wins').style.background.includes('rgb(255, 215, 0)'); 
-                    const isBadTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)');
-                    
-                    if (isWinTab) {
-                        const winDoc = await getDoc(doc(db, 'pk_wins', id));
-                        if (winDoc.exists()) {
-                            const data = winDoc.data();
-                            if (data.originalBadId) {
-                                const badRef = doc(db, 'bad_things', data.originalBadId);
-                                await updateDoc(badRef, {
-                                    isDefeated: false,
-                                    lastWinId: null,
-                                    updatedAt: serverTimestamp()
-                                });
-                            }
-                        }
-                        await deleteDoc(doc(db, 'pk_wins', id));
-                    } else {
-                        const collectionName = isBadTab ? 'bad_things' : 'good_things';
-                        await deleteDoc(doc(db, collectionName, id));
-                    }
-                    
-                    btn.closest('.card-item').remove();
+                const isWinTab = document.getElementById('tab-wins').style.background.includes('rgb(255, 215, 0)');
+                
+                // [修改] 針對勝利紀錄顯示特定風格提示
+                let confirmMsg = '確定要刪除這張卡片嗎？';
+                if (isWinTab) {
+                    confirmMsg = '只刪除勝利紀錄與其對話紀錄，好事卡/鳥事卡仍保存在各倉庫中。';
                 }
+
+                const confirmed = await showConfirmMessage(confirmMsg);
+                if (!confirmed) return;
+
+                if (isWinTab) {
+                     // 1. 刪除勝利紀錄
+                     const winDoc = await getDoc(doc(db, 'pk_wins', id));
+                     if (winDoc.exists()) {
+                         const data = winDoc.data();
+                         // 2. 還原鳥事狀態並「清除對話紀錄」
+                         if (data.originalBadId) {
+                             const badRef = doc(db, 'bad_things', data.originalBadId);
+                             await updateDoc(badRef, {
+                                 isDefeated: false,
+                                 lastWinId: null,
+                                 chatLogs: [], // [關鍵] 清空關聯對話
+                                 updatedAt: serverTimestamp()
+                             });
+                         }
+                     }
+                     await deleteDoc(doc(db, 'pk_wins', id));
+                } else {
+                    // 一般刪除
+                    const isBadTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)');
+                    const collectionName = isBadTab ? 'bad_things' : 'good_things';
+                    await deleteDoc(doc(db, collectionName, id));
+                }
+                
+                btn.closest('.card-item').remove();
+
             } else if (action === 'edit') {
                 const isGoodTab = document.getElementById('tab-good').style.background.includes('var(--good-light)');
                 const collectionName = isGoodTab ? 'good_things' : 'bad_things';
@@ -1594,7 +1603,6 @@ function createWarehouseHTML() {
                 }
             } else if (action === 'defeat') {
                 document.getElementById('warehouse-modal').classList.add('hidden');
-                
                 if (winId) {
                     const winSnap = await getDoc(doc(db, 'pk_wins', winId));
                     if (winSnap.exists()) {
@@ -1602,7 +1610,6 @@ function createWarehouseHTML() {
                         return;
                     }
                 }
-                
                 const docSnap = await getDoc(doc(db, 'bad_things', id));
                 if (docSnap.exists()) {
                     startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things');
@@ -1682,8 +1689,7 @@ async function loadWarehouseData(type) {
     }
 
     try {
-        // [策略修正] 
-        // 1. 資料庫查詢：使用 createdAt (建立時間) 抓取，確保所有資料（含舊資料與勝利紀錄）都能被抓到，不會消失。
+        // [策略修正] 1. 資料庫查詢：使用 createdAt 抓取
         const q = query(collection(db, collectionName), orderBy("createdAt", "desc"), limit(100));
         const querySnapshot = await getDocs(q);
         
@@ -1694,25 +1700,21 @@ async function loadWarehouseData(type) {
             return;
         }
 
-        // [策略修正]
-        // 2. 前端排序：將抓下來的資料轉為陣列，依照 updatedAt (若有) 優先排序，沒有則用 createdAt。
-        // 這樣可以實現「後修改的放上面」，同時不漏掉任何資料。
+        // [策略修正] 2. 前端排序
         let docs = [];
         querySnapshot.forEach(doc => docs.push(doc));
 
         docs.sort((a, b) => {
             const dataA = a.data();
             const dataB = b.data();
-            // 取得時間戳 (毫秒)，優先用 updatedAt，沒有則用 createdAt
             const timeA = dataA.updatedAt?.toMillis() || dataA.createdAt?.toMillis() || 0;
             const timeB = dataB.updatedAt?.toMillis() || dataB.createdAt?.toMillis() || 0;
-            return timeB - timeA; // 降冪 (時間越新的數字越大，放前面)
+            return timeB - timeA; 
         });
 
         let hasData = false;
 
-        // [策略修正]
-        // 3. 渲染迴圈：改用排序後的 docs 陣列
+        // 3. 渲染迴圈
         docs.forEach((doc) => {
             const data = doc.data();
             const docId = doc.id;
@@ -1737,20 +1739,19 @@ async function loadWarehouseData(type) {
             let displayTitle = data.title;
             let displayContent = data.content;
             
-            const iconEdit = `<svg style="pointer-events:none; width:20px; height:20px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
-            const iconTrash = `<svg style="pointer-events:none; width:20px; height:20px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+            // [修正] 按鈕樣式：圓形按鈕縮小至 28px
+            const iconEdit = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
+            const iconTrash = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2 2v2"></path></svg>`;
             
-            const btnStyle = `width:44px; height:44px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;`;
+            const btnStyle = `width:28px; height:28px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;`;
 
             if (type === 'good') { 
                 iconColor = 'var(--good-icon)'; 
                 labelText = `等級: ${data.score || 1}`;
                 
                 actionButtonsHTML = `
-                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end;">
-                        <button data-action="edit" data-id="${docId}" style="${btnStyle}" title="編輯">${iconEdit}</button>
-                        <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
-                    </div>
+                    <button data-action="edit" data-id="${docId}" style="${btnStyle}" title="編輯">${iconEdit}</button>
+                    <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
                 `;
             }
             else if (type === 'bad') { 
@@ -1770,41 +1771,48 @@ async function loadWarehouseData(type) {
                     winIdAttr = data.lastWinId || ""; 
                 }
 
-                const defeatBtnStyle = `height:40px; padding:0 20px; border-radius:20px; border:none; cursor:pointer; font-weight:bold; font-size:14px; color:#FFF; background:${btnDefeatColor};`;
+                // [修正] 擊敗按鈕縮小為高度 28px
+                const defeatBtnStyle = `height:28px; padding:0 12px; border-radius:14px; border:none; cursor:pointer; font-weight:bold; font-size:12px; color:#FFF; background:${btnDefeatColor};`;
 
                 actionButtonsHTML = `
-                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end; align-items:center;">
-                        <button data-action="defeat" data-id="${docId}" data-win-id="${winIdAttr}" style="${defeatBtnStyle}">${btnDefeatText}</button>
-                        <button data-action="edit" data-id="${docId}" style="${btnStyle}" title="編輯">${iconEdit}</button>
-                        <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
-                    </div>
+                    <button data-action="defeat" data-id="${docId}" data-win-id="${winIdAttr}" style="${defeatBtnStyle}">${btnDefeatText}</button>
+                    <button data-action="edit" data-id="${docId}" style="${btnStyle}" title="編輯">${iconEdit}</button>
+                    <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
                 `;
             }
             else { 
                 iconColor = '#E0C060'; 
-                labelText = ''; 
+                // [修正] 勝利卡顯示等級
+                labelText = `等級: ${data.score || 1}`;
                 displayTitle = `擊敗「${data.badTitle}」`;
                 displayContent = `戰友：${data.goodTitle}`;
 
+                // [修正] 回顧按鈕縮小
+                const reviewBtnStyle = `height:28px; padding:0 12px; border-radius:14px; border:none; cursor:pointer; font-weight:bold; font-size:12px; background:#FFF9C4; color:#FBC02D;`;
+
                 actionButtonsHTML = `
-                    <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end;">
-                        <button data-action="review" data-id="${docId}" style="height:40px; padding:0 20px; border-radius:20px; border:none; cursor:pointer; font-weight:bold; font-size:13px; background:#FFF9C4; color:#FBC02D;">回顧勝利</button>
-                        <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
-                    </div>
+                    <button data-action="review" data-id="${docId}" style="${reviewBtnStyle}">回顧勝利</button>
+                    <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
                 `;
             }
 
+            // [修改] 版面結構：標題/內容在一區，下方一列分為 左(等級) 右(按鈕)
             const cardHTML = `
                 <div class="card-item" style="background: ${cardBg}; padding: 15px; border-radius: 12px; border: 1px solid #F0F0F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; gap: 10px;">
                     <div style="width: 4px; background: ${iconColor}; border-radius: 2px;"></div>
-                    <div style="flex: 1;">
+                    <div style="flex: 1; display:flex; flex-direction:column;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                             <span style="font-weight: 700; color: var(--text-main); font-size: 15px;">${displayTitle}</span>
                             <span style="font-size: 12px; color: #BBB;">${date}</span>
                         </div>
-                        <div style="font-size: 13px; color: #666; line-height: 1.4;">${displayContent}</div>
-                        ${labelText ? `<div style="margin-top: 8px; font-size: 12px; color: ${iconColor}; font-weight: 700;">${labelText}</div>` : ''}
-                        ${actionButtonsHTML}
+                        <div style="font-size: 13px; color: #666; line-height: 1.4; flex:1;">${displayContent}</div>
+                        
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid #F9F9F9;">
+                            <div style="font-size: 12px; color: ${iconColor}; font-weight: 700;">${labelText}</div>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                ${actionButtonsHTML}
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
