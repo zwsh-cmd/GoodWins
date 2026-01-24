@@ -100,37 +100,83 @@ if(mainHeaderTitle && !mainHeaderTitle.querySelector('img')) {
     `;
 }
 
-// --- 新增：通用提示視窗元件 (取代原生 alert) ---
+// --- 新增：通用提示視窗元件 (取代原生 alert) & 確認視窗 ---
 function createGlobalComponents() {
-    if (document.getElementById('system-alert')) return;
-
-    const alertHTML = `
-    <div id="system-alert" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 1000; display: flex; align-items: center; justify-content: center;">
-        <div style="background: #FFF; width: 80%; max-width: 300px; padding: 24px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; display: flex; flex-direction: column; gap: 16px;">
-            <div id="alert-msg" style="font-size: 15px; color: var(--text-main); line-height: 1.6; white-space: pre-line;"></div>
-            <button id="btn-alert-ok" style="background: var(--primary); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; width: 100%;">我知道了</button>
-        </div>
-    </div>
-    `;
     const wrapper = document.getElementById('mobile-wrapper');
-    if(wrapper) wrapper.insertAdjacentHTML('beforeend', alertHTML);
+    if(!wrapper) return;
 
-    document.getElementById('btn-alert-ok').addEventListener('click', () => {
-        document.getElementById('system-alert').classList.add('hidden');
-    });
+    // 1. 提示視窗 (Alert)
+    if (!document.getElementById('system-alert')) {
+        const alertHTML = `
+        <div id="system-alert" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: #FFF; width: 80%; max-width: 300px; padding: 24px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; display: flex; flex-direction: column; gap: 16px;">
+                <div id="alert-msg" style="font-size: 15px; color: var(--text-main); line-height: 1.6; white-space: pre-line;"></div>
+                <button id="btn-alert-ok" style="background: var(--primary); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; width: 100%;">我知道了</button>
+            </div>
+        </div>
+        `;
+        wrapper.insertAdjacentHTML('beforeend', alertHTML);
+        document.getElementById('btn-alert-ok').addEventListener('click', () => {
+            document.getElementById('system-alert').classList.add('hidden');
+        });
+    }
+
+    // 2. 確認視窗 (Confirm) - 風格一致
+    if (!document.getElementById('system-confirm')) {
+        const confirmHTML = `
+        <div id="system-confirm" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 1001; display: flex; align-items: center; justify-content: center;">
+            <div style="background: #FFF; width: 80%; max-width: 300px; padding: 24px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; display: flex; flex-direction: column; gap: 16px;">
+                <div id="confirm-msg" style="font-size: 15px; color: var(--text-main); line-height: 1.6; white-space: pre-line; font-weight:bold;"></div>
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-confirm-cancel" style="flex:1; background: #F5F5F5; color: #666; border: none; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;">取消</button>
+                    <button id="btn-confirm-ok" style="flex:1; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;">確定離開</button>
+                </div>
+            </div>
+        </div>
+        `;
+        wrapper.insertAdjacentHTML('beforeend', confirmHTML);
+    }
 }
-createGlobalComponents(); // 馬上建立
+createGlobalComponents(); 
 
-// 封裝顯示函式 (之後都呼叫這個)
 function showSystemMessage(msg) {
     const alertEl = document.getElementById('system-alert');
-    const msgEl = document.getElementById('alert-msg');
-    if(alertEl && msgEl) {
-        msgEl.innerText = msg;
+    if(alertEl) {
+        document.getElementById('alert-msg').innerText = msg;
         alertEl.classList.remove('hidden');
-    } else {
-        alert(msg); // 備用
-    }
+    } else { alert(msg); }
+}
+
+// [新增] 顯示確認視窗，回傳 Promise (true=確定, false=取消)
+function showConfirmMessage(msg) {
+    return new Promise((resolve) => {
+        const confirmEl = document.getElementById('system-confirm');
+        const msgEl = document.getElementById('confirm-msg');
+        const btnOk = document.getElementById('btn-confirm-ok');
+        const btnCancel = document.getElementById('btn-confirm-cancel');
+
+        if(!confirmEl) { resolve(confirm(msg)); return; }
+
+        msgEl.innerText = msg;
+        confirmEl.classList.remove('hidden');
+
+        const handleOk = () => {
+            cleanup();
+            resolve(true);
+        };
+        const handleCancel = () => {
+            cleanup();
+            resolve(false);
+        };
+        const cleanup = () => {
+            confirmEl.classList.add('hidden');
+            btnOk.removeEventListener('click', handleOk);
+            btnCancel.removeEventListener('click', handleCancel);
+        };
+
+        btnOk.addEventListener('click', handleOk);
+        btnCancel.addEventListener('click', handleCancel);
+    });
 }
 
 // --- 動態生成 PK 畫面 (修正版：深色底部防誤觸、灰色圓形重來按鈕) ---
@@ -412,43 +458,115 @@ const screens = {
     warehouse: document.getElementById('warehouse-modal') // 新增倉庫
 };
 
-// 補上 PK 離開按鈕的監聽
+// 補上 PK 離開按鈕的監聽 (實現三種離開情境 & 對話紀錄絕對保留)
 const btnExitPK = document.getElementById('btn-exit-pk');
 if(btnExitPK) {
     btnExitPK.addEventListener('click', async () => {
-        // 1. 立即中斷 AI 請求
-        if (currentAbortController) {
-            currentAbortController.abort();
-            currentAbortController = null;
+        
+        const exitAndRefresh = async (targetTab) => {
+            // 中斷 AI
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+            }
+            
+            screens.pk.classList.add('hidden');
+            
+            // 重整倉庫
+            if (!screens.warehouse.classList.contains('hidden')) {
+                // 如果有指定 tab 就切換，否則維持現狀
+                let tabToLoad = targetTab;
+                if (!tabToLoad) {
+                    tabToLoad = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
+                                document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
+                } else {
+                    const tabBtn = document.getElementById(`tab-${targetTab}`);
+                    if(tabBtn) tabBtn.click(); 
+                    return; 
+                }
+                loadWarehouseData(tabToLoad);
+            }
+        };
+
+        // --- 情境判斷 ---
+
+        // 1. 如果已經勝利：直接離開，不需詢問
+        if (currentPKContext.isVictory) {
+            const target = currentPKContext.collection === 'pk_wins' ? 'wins' : 'bad';
+            await exitAndRefresh(target);
+            return;
         }
 
-        // 2. [核心邏輯] 只要是鳥事PK且未勝利，離開就視為失敗（回到待PK庫）
-        // [修正] 除了 isDefeated: false，還必須把 lastWinId 清空 (設為 null)
-        // 這樣才不會讓倉庫誤判為「已勝利」
+        // 2. [待PK鳥事庫] 情境 (擊敗它 / 再擊敗)
         if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
-            if (!currentPKContext.isVictory) {
-                try {
-                    const docRef = doc(db, 'bad_things', currentPKContext.docId);
+            
+            let promptMsg = "PK尚未完成，確定離開？";
+            if (currentPKContext.wasDefeated) { 
+                promptMsg = "再度PK尚未完成，確定離開？";
+            }
+
+            const confirmExit = await showConfirmMessage(promptMsg);
+            if (!confirmExit) return; // 取消則繼續
+
+            try {
+                const docRef = doc(db, 'bad_things', currentPKContext.docId);
+                
+                if (currentPKContext.wasDefeated) {
+                    // [劇本 B] 再擊敗中斷 -> 變回「擊敗它」(isDefeated: false)
                     await updateDoc(docRef, {
                         isDefeated: false, 
-                        lastWinId: null, // [新增] 徹底清除勝利紀錄 ID
-                        updatedAt: serverTimestamp()
+                        lastWinId: null, 
+                        updatedAt: serverTimestamp(), // 置頂
+                        chatLogs: currentPKContext.chatLogs // [關鍵] 保存當前對話紀錄到鳥事卡 (不可刪除!)
                     });
-                    console.log("PK中斷，已重置為待PK狀態");
-                } catch (e) {
-                    console.error("Reset bad thing status failed:", e);
+                } else {
+                    // [劇本 A] 擊敗它中斷 -> 維持「擊敗它」，但更新時間以置頂
+                    await updateDoc(docRef, {
+                        updatedAt: serverTimestamp(),
+                        chatLogs: currentPKContext.chatLogs // [關鍵] 保存對話 (不可刪除!)
+                    });
                 }
-            }
+            } catch (e) { console.error(e); }
+
+            await exitAndRefresh('bad');
+            return;
         }
 
-        screens.pk.classList.add('hidden');
-        
-        // 3. 重整倉庫
-        if (!screens.warehouse.classList.contains('hidden')) {
-            const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
-                               document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
-            loadWarehouseData(currentTab);
+        // 3. [PK勝利庫] 情境 (回顧勝利 -> 重來)
+        // 進入此處代表：來源是 pk_wins 且 isVictory 為 false (代表按了重來且還沒贏)
+        if (currentPKContext.collection === 'pk_wins' && currentPKContext.winId) {
+            
+            const promptMsg = "再度PK尚未完成，要保持勝利紀錄，還是讓鳥事卡重新回到待擊敗狀態？";
+            // OK = 確定離開(並刪除紀錄)
+            const confirmReset = await showConfirmMessage(promptMsg);
+            
+            if (!confirmReset) return; // 取消則繼續 PK
+
+            try {
+                // [劇本 C] 刪除勝利，鳥事回歸
+                
+                // 1. [最重要] 先把這場 PK 的完整對話紀錄搬家到原始鳥事卡
+                if (currentPKContext.originalBadId) {
+                    const badRef = doc(db, 'bad_things', currentPKContext.originalBadId);
+                    await updateDoc(badRef, {
+                        isDefeated: false,
+                        lastWinId: null,
+                        updatedAt: serverTimestamp(), // 置頂
+                        chatLogs: currentPKContext.chatLogs // <--- 這裡！對話紀錄搬家，確保不遺失
+                    });
+                }
+
+                // 2. 刪除勝利紀錄
+                await deleteDoc(doc(db, 'pk_wins', currentPKContext.winId));
+                
+            } catch(e) { console.error(e); }
+
+            await exitAndRefresh('bad'); // 強制跳轉回待PK鳥事庫
+            return;
         }
+
+        // 其他情況直接離開
+        exitAndRefresh();
     });
 }
 
@@ -700,11 +818,13 @@ async function startPK(data, collectionSource) {
     currentPKContext = {
         docId: data.id,
         collection: collectionSource,
-        // [新增] 如果是回顧勝利，記錄勝利ID，方便後續更新同一筆
         winId: collectionSource === 'pk_wins' ? data.id : null,
-        originalBadId: data.originalBadId || null, // [新增] 保存原始鳥事 ID，供重來按鈕切換身分使用
+        originalBadId: data.originalBadId || null,
+        // [新增] 記錄初始狀態是否為已擊敗 (用於離開時判斷是劇本 A 還是 B)
+        wasDefeated: data.isDefeated || false, 
         bad: null,
         good: null,
+        // [修正] 對話紀錄絕對保留！無論是否為 Fresh PK，只要有紀錄就載入
         chatLogs: data.chatLogs || [],
         isVictory: false 
     };
@@ -720,7 +840,6 @@ async function startPK(data, collectionSource) {
         document.getElementById('pk-good-title').innerText = data.goodTitle;
         document.getElementById('pk-good-content').innerText = data.goodContent || "(獲勝的好事)";
         
-        // 重建 bad/good 物件供 AI 參考
         currentPKContext.bad = { title: data.badTitle, content: data.badContent };
         currentPKContext.good = { title: data.goodTitle, content: data.goodContent };
 
@@ -731,21 +850,24 @@ async function startPK(data, collectionSource) {
         }
         
     } else {
-        // --- 進行中的 PK ---
+        // --- 進行中的 PK (包含 擊敗它 & 再擊敗) ---
         if(btnRePk) btnRePk.style.display = 'none';
 
         document.getElementById('pk-bad-title').innerText = data.title;
         document.getElementById('pk-bad-content').innerText = data.content;
         currentPKContext.bad = data;
 
-        // 渲染歷史對話
+        // 渲染歷史對話 (如果有的話)
         if (currentPKContext.chatLogs.length > 0) {
-            // [修改] 傳入 log.modelName 以顯示歷史紀錄中的模型名稱
             currentPKContext.chatLogs.forEach(log => addChatMessage(log.role, log.text, false, log.modelName));
         }
 
-        // 只有當「沒有對話紀錄」時，才進行選牌 (新開局)
-        if (currentPKContext.chatLogs.length === 0) {
+        // [核心修正] AI 啟動邏輯：
+        // 1. 如果沒有對話紀錄，代表是全新的 PK -> 觸發選牌
+        // 2. 如果是「待PK鳥事」(collectionSource === 'bad_things') 且沒有好事卡資料 (因為 good 卡不存於 bad doc)，
+        //    即使有歷史對話，AI 也需要重新選牌來進行上下文對照 (否則無法辯論)。
+        //    所以這裡我們判斷：如果是 bad_things 且 currentPKContext.good 為空，就執行選牌。
+        if (currentPKContext.chatLogs.length === 0 || (collectionSource === 'bad_things' && !currentPKContext.good)) {
             document.getElementById('pk-good-title').innerText = "AI 思考中...";
             document.getElementById('pk-good-content').innerText = "正在從資料庫挑選最佳策略...";
             
@@ -778,7 +900,10 @@ async function startPK(data, collectionSource) {
                     const loadingEl = document.getElementById('ai-selecting-msg');
                     if(loadingEl) loadingEl.remove();
 
-                    await callGeminiChat("【系統指令：PK 開始。請執行模式一：策略選牌已完成，請進行價值辯論。】", true);
+                    // 只有在真的是全新開局時，才發送開場白；如果是接續歷史對話，則不需發送
+                    if (currentPKContext.chatLogs.length === 0) {
+                        await callGeminiChat("【系統指令：PK 開始。請執行模式一：策略選牌已完成，請進行價值辯論。】", true);
+                    }
                     
                 } else {
                     document.getElementById('pk-good-title').innerText = "尚無好事";
@@ -1532,8 +1657,9 @@ async function loadWarehouseData(type) {
     }
 
     try {
-        // [修正] 為了做前端過濾，拉取數量稍微提高到 100
-        const q = query(collection(db, collectionName), orderBy("createdAt", "desc"), limit(100));
+        // [修正] 改為依照 updatedAt (最後更新時間) 排序，實現「後修改的放上面」
+        // 剛互動過的卡片 updatedAt 會最新，所以會置頂
+        const q = query(collection(db, collectionName), orderBy("updatedAt", "desc"), limit(100));
         const querySnapshot = await getDocs(q);
         
         listEl.innerHTML = ''; 
