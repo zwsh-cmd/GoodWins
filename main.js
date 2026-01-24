@@ -854,17 +854,20 @@ let currentPKContext = { bad: null, good: null };
 
 // --- PK 核心邏輯 (保存對話版) ---
 
-// [修正] AI 智慧選牌模組：移除空值檢查 + 強制階級擴展 + 創意切入
+// [修正] AI 智慧選牌模組：嚴格「小於等於」起手 + 湊滿10張 + 創意切入 + 無保底
 async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey || candidateDocs.length === 0) return null;
 
-    // 1. 排除清單處理
+    // 1. 轉陣列
     const excludes = Array.isArray(excludeList) ? excludeList : (excludeList ? [excludeList] : []);
 
-    // 2. 嚴格過濾：只保留 ID 不在排除清單中的牌 (絕對不重複)
+    // 2. 嚴格過濾：同時檢查 ID 與 Title (支援歷史標題排除 + 本局ID排除)
     const availableDocs = candidateDocs.filter(doc => {
-        return !excludes.includes(doc.id);
+        const data = doc.data();
+        const isExcludedById = excludes.includes(doc.id);
+        const isExcludedByTitle = excludes.includes(data.title);
+        return !isExcludedById && !isExcludedByTitle;
     });
 
     // [核心修正] 移除「回傳 null」的檢查。
@@ -911,7 +914,6 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
         content: (doc.data().content || "").substring(0, 50) + "..."
     }));
 
-    // [Prompt] 植入創意指令：沒有退路，必須找出連結
     const selectionPrompt = `
     任務：你是「GoodWins」APP 的後台決策大腦。請從下列【候選好事卡清單】中，挑選唯一一張最能破解【眼前鳥事】的卡片。
 
@@ -924,10 +926,12 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     ${JSON.stringify(aiInputCandidates)}
 
     【選牌最高指導原則】
-    1. **絕對不重複**：清單中已經移除了已出現過的卡片。
-    2. **創意切入 (Creative Angle) - 這是最重要的**：
-       - 如果你覺得清單中的牌與鳥事「不相關」或「等級太低」，請**發揮你的創意與聯想力**。
-       - **絕對不要放棄選擇**。這就是使用者手上僅有的牌，你的任務是找出一個意想不到的角度（例如：幽默、反諷、微小的安慰、轉念），讓這張看似無關的牌也能成為一種力量。
+    1. **絕對不重複**：清單中已經完全移除了本局對話出現過的所有卡片。
+    2. **優先策略 - 以柔克剛**：
+       - 若有「好事等級 <= 鳥事等級」的卡片，優先評估。微小的善意若能擊潰巨大的惡意，最有力量。
+    3. **必要策略 - 創意切入 (Creative Angle)**：
+       - **如果候選清單中沒有一張看起來「完美對應」或「等級夠高」的牌，請不要放棄。**
+       - 這是使用者僅有的籌碼。請發揮你的聯想力，從中挑選一張最有可能透過**「意想不到的角度」**或**「幽默感」**來翻轉局勢的卡片。
        - 告訴自己：**沒有無用的好事，只有沒被發現的連結。** 請務必選出一張。
 
     【輸出規定】
