@@ -240,69 +240,69 @@ function createPKScreenHTML() {
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', pkHTML);
         
-        // --- [修改] 展開箭頭邏輯 (全寬覆蓋模式 + 捲軸) ---
+        // --- [修改] 展開箭頭邏輯 (自動長高延伸，父容器捲動) ---
         wrapper.querySelectorAll('.expand-arrow').forEach(arrow => {
             arrow.addEventListener('click', (e) => {
-                e.stopPropagation(); // 阻止冒泡
+                e.stopPropagation(); 
                 
                 const card = arrow.closest('.action-card');
                 const p = card.querySelector('p');
                 const isExpanded = card.classList.contains('expanded-mode');
+                const mainContainer = card.closest('main'); // 抓取父容器以便控制捲動
                 
-                // 找出另一張卡片 (為了隱藏它)
                 const isBad = card.id === 'btn-pk-bad';
                 const otherCard = isBad ? document.getElementById('btn-pk-good') : document.getElementById('btn-pk-bad');
 
                 if (isExpanded) {
                     // --- 還原模式 ---
                     card.classList.remove('expanded-mode');
-                    // 清除強制樣式
                     card.style.position = '';
                     card.style.width = '';
                     card.style.height = '';
+                    card.style.minHeight = '';
                     card.style.zIndex = '';
                     card.style.left = '';
                     card.style.top = '';
-                    card.style.overflowY = ''; // 清除捲軸
                     
-                    // 顯示另一張卡
+                    // 還原父容器捲動設定
+                    if(mainContainer) mainContainer.style.overflowY = '';
+
                     if(otherCard) otherCard.style.opacity = '1';
 
                     if (p) {
                         p.style.webkitLineClamp = '3';
                         arrow.innerText = '▼';
-                        
-                        // 還原箭頭樣式
                         arrow.style.position = '';
                         arrow.style.bottom = '';
-                        arrow.style.background = 'rgba(0,0,0,0.05)';
                         arrow.style.zIndex = '';
+                        arrow.style.background = 'rgba(0,0,0,0.05)';
                     }
                 } else {
-                    // --- 放大覆蓋模式 ---
+                    // --- 放大延伸模式 ---
                     card.classList.add('expanded-mode');
-                    // 設定絕對定位以覆蓋父容器
                     card.style.position = 'absolute';
                     card.style.zIndex = '50';
                     card.style.top = '0';
                     card.style.left = '0';
                     card.style.width = '100%'; 
-                    card.style.height = '100%'; // 高度佔滿
-                    card.style.overflowY = 'auto'; // [重點] 允許內部捲動，確保長文可見
                     
-                    // 隱藏另一張卡避免干擾
+                    // [重點] 高度設為 auto 讓內容撐開，最小高度 100% 確保蓋滿
+                    card.style.height = 'auto'; 
+                    card.style.minHeight = '100%';
+                    
+                    // [重點] 讓外層容器可以捲動，而不是卡片內部捲動
+                    if(mainContainer) mainContainer.style.overflowY = 'auto';
+                    
+                    // 隱藏另一張卡
                     if(otherCard) otherCard.style.opacity = '0';
 
                     if (p) {
-                        p.style.webkitLineClamp = 'unset'; // 顯示全文
+                        p.style.webkitLineClamp = 'unset'; 
                         arrow.innerText = '▲';
                         
-                        // [重點] 讓箭頭黏在底部，方便隨時收合
                         arrow.style.position = 'sticky';
                         arrow.style.bottom = '0';
                         arrow.style.zIndex = '10';
-                        
-                        // 設定背景色遮擋文字，避免重疊 (依卡片類型設定顏色)
                         if (isBad) arrow.style.background = 'var(--bad-light)';
                         else arrow.style.background = 'var(--good-light)';
                     }
@@ -431,7 +431,7 @@ function createSearchHTML() {
 
     // 關閉搜尋
     document.getElementById('btn-close-search').addEventListener('click', () => {
-        document.getElementById('search-modal').classList.add('hidden');
+        history.back();
     });
 
     // [修改] 即時搜尋邏輯 (input 事件 + 防手震)
@@ -511,120 +511,78 @@ const screens = {
     warehouse: document.getElementById('warehouse-modal') // 新增倉庫
 };
 
-// 補上 PK 離開按鈕的監聽 (實現三種離開情境 & 對話紀錄絕對保留)
+// 補上 PK 離開按鈕的監聽 (整合導航版)
 const btnExitPK = document.getElementById('btn-exit-pk');
 if(btnExitPK) {
     btnExitPK.addEventListener('click', async () => {
         
-        const exitAndRefresh = async (targetTab) => {
-            // 中斷 AI
+        // 封裝離開動作：使用 history.back() 回到上一頁 (會自動關閉畫面)
+        const performExit = async () => {
             if (currentAbortController) {
                 currentAbortController.abort();
                 currentAbortController = null;
             }
-            
-            screens.pk.classList.add('hidden');
-            
-            // [修正] 導航邏輯：如果有指定目標分頁 (例如 wins/bad)，強制開啟倉庫並載入
-            if (targetTab || !screens.warehouse.classList.contains('hidden')) {
-                if (screens.warehouse) screens.warehouse.classList.remove('hidden');
-                
-                let tabToLoad = targetTab;
-                // 如果沒指定，嘗試判斷當前停留的分頁
-                if (!tabToLoad) {
-                    tabToLoad = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
-                                document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
-                }
-
-                // 觸發切換
-                const tabBtn = document.getElementById(`tab-${tabToLoad}`);
-                if(tabBtn) {
-                     tabBtn.click();
-                } else {
-                     loadWarehouseData(tabToLoad);
-                }
-            }
+            history.back(); // 觸發 popstate，由導航系統處理關閉
         };
 
-        // --- 情境判斷 ---
-
-        // 1. 如果已經勝利：直接離開，不需詢問
+        // 1. 如果已經勝利：直接離開
         if (currentPKContext.isVictory) {
-            const target = currentPKContext.collection === 'pk_wins' ? 'wins' : 'bad';
-            await exitAndRefresh(target);
+            await performExit();
             return;
         }
 
-        // 2. [待PK鳥事庫] 情境 (擊敗它 / 再擊敗)
+        // 2. [待PK鳥事庫] 情境
         if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
-            
             let promptMsg = "PK尚未完成，確定離開？";
-            if (currentPKContext.wasDefeated) { 
-                promptMsg = "再度PK尚未完成，確定離開？";
-            }
+            if (currentPKContext.wasDefeated) promptMsg = "再度PK尚未完成，確定離開？";
 
             const confirmExit = await showConfirmMessage(promptMsg);
-            if (!confirmExit) return; // 取消則繼續
+            if (!confirmExit) return; 
 
             try {
                 const docRef = doc(db, 'bad_things', currentPKContext.docId);
-                
+                const updateData = {
+                    updatedAt: serverTimestamp(),
+                    chatLogs: currentPKContext.chatLogs
+                };
                 if (currentPKContext.wasDefeated) {
-                    // [劇本 B] 再擊敗中斷 -> 變回「擊敗它」(isDefeated: false)
-                    await updateDoc(docRef, {
-                        isDefeated: false, 
-                        lastWinId: null, 
-                        updatedAt: serverTimestamp(), // 置頂
-                        chatLogs: currentPKContext.chatLogs // [關鍵] 保存當前對話紀錄到鳥事卡 (不可刪除!)
-                    });
-                } else {
-                    // [劇本 A] 擊敗它中斷 -> 維持「擊敗它」，但更新時間以置頂
-                    await updateDoc(docRef, {
-                        updatedAt: serverTimestamp(),
-                        chatLogs: currentPKContext.chatLogs // [關鍵] 保存對話 (不可刪除!)
-                    });
+                    updateData.isDefeated = false;
+                    updateData.lastWinId = null;
                 }
+                await updateDoc(docRef, updateData);
             } catch (e) { console.error(e); }
 
-            await exitAndRefresh('bad');
+            await performExit();
             return;
         }
 
-        // 3. [PK勝利庫] 情境 (回顧勝利 -> 重來)
-        // 進入此處代表：來源是 pk_wins 且 isVictory 為 false (代表按了重來且還沒贏)
+        // 3. [PK勝利庫] 情境
         if (currentPKContext.collection === 'pk_wins' && currentPKContext.winId) {
-            
             const promptMsg = "再度PK尚未完成，要保持勝利紀錄，還是讓鳥事卡重新回到待擊敗狀態？";
-            // OK = 確定離開(並刪除紀錄)
             const confirmReset = await showConfirmMessage(promptMsg);
             
-            if (!confirmReset) return; // 取消則繼續 PK
+            if (!confirmReset) return; 
 
             try {
-                // [劇本 C] 刪除勝利，鳥事回歸
-                
-                // 1. [最重要] 先把這場 PK 的完整對話紀錄搬家到原始鳥事卡
                 if (currentPKContext.originalBadId) {
                     const badRef = doc(db, 'bad_things', currentPKContext.originalBadId);
                     await updateDoc(badRef, {
                         isDefeated: false,
                         lastWinId: null,
-                        updatedAt: serverTimestamp(), // 置頂
-                        chatLogs: currentPKContext.chatLogs // <--- 這裡！對話紀錄搬家，確保不遺失
+                        updatedAt: serverTimestamp(),
+                        chatLogs: currentPKContext.chatLogs 
                     });
                 }
-
-                // 2. 刪除勝利紀錄
                 await deleteDoc(doc(db, 'pk_wins', currentPKContext.winId));
-                
             } catch(e) { console.error(e); }
 
-            await exitAndRefresh('bad'); // 強制跳轉回待PK鳥事庫
+            // 這裡特殊：因為勝利卡已經被刪除，回到上一頁(勝利庫)會看不到東西
+            // 所以我們先 back() 回去，系統會自動重新載入倉庫列表，這樣就正確了
+            await performExit();
             return;
         }
 
-        // 其他情況直接離開
-        exitAndRefresh();
+        performExit();
     });
 }
 
@@ -657,26 +615,28 @@ onAuthStateChanged(auth, (user) => {
 
 // --- 7. 按鈕事件綁定 ---
 
-// [修改] 綁定主畫面的搜尋按鈕 -> 開啟搜尋
+// [修改] 綁定主畫面的搜尋按鈕 -> 開啟搜尋 (導航版)
 const btnSearch = document.getElementById('btn-search');
 if (btnSearch) {
     btnSearch.addEventListener('click', () => {
-        createSearchHTML(); // 確保 HTML 存在
+        history.pushState({ tier: 'search' }, '', '');
+        createSearchHTML(); 
         document.getElementById('search-modal').classList.remove('hidden');
         document.getElementById('input-search-keyword').focus();
     });
 }
 
-// [新增] 綁定主畫面的倉庫按鈕 -> 開啟倉庫
+// [新增] 綁定主畫面的倉庫按鈕 -> 開啟倉庫 (導航版)
 const btnWarehouseEntry = document.getElementById('btn-warehouse-entry');
 if (btnWarehouseEntry) {
     btnWarehouseEntry.addEventListener('click', () => {
-        // 確保倉庫視窗變數已抓取
+        history.pushState({ tier: 'warehouse' }, '', '');
         if (!screens.warehouse) screens.warehouse = document.getElementById('warehouse-modal');
         
         if (screens.warehouse) {
             screens.warehouse.classList.remove('hidden');
-            loadWarehouseData('good'); // 預設載入好事
+            // 預設載入好事，或上次的狀態 (導航系統會處理)
+            loadWarehouseData('good'); 
         }
     });
 }
@@ -686,29 +646,19 @@ btns.login.addEventListener('click', () => {
     signInWithPopup(auth, provider).catch(err => alert("登入失敗: " + err.message));
 });
 
-// 開啟編輯器 (使用 querySelector 因為這些是 class)
+// 開啟編輯器
 const btnGood = document.querySelector('.card-good');
 const btnBad = document.querySelector('.card-bad');
 
-// 移除 HTML 中舊有的 onclick alert
 if (btnGood) btnGood.removeAttribute('onclick');
 if (btnBad) btnBad.removeAttribute('onclick');
 
-if (btnGood) {
-    btnGood.addEventListener('click', () => {
-        openEditor('good');
-    });
-}
+if (btnGood) btnGood.addEventListener('click', () => openEditor('good'));
+if (btnBad) btnBad.addEventListener('click', () => openEditor('bad'));
 
-if (btnBad) {
-    btnBad.addEventListener('click', () => {
-        openEditor('bad');
-    });
-}
-
-// 取消編輯
+// 取消編輯 -> 回上一頁
 btns.cancelEdit.addEventListener('click', () => {
-    screens.editor.classList.add('hidden');
+    history.back();
 });
 
 // [修改] 抽離儲存邏輯，支援「僅儲存」與「儲存並PK」兩種行為
@@ -867,6 +817,7 @@ async function aiPickBestCard(badData, candidateDocs) {
 }
 
 async function startPK(data, collectionSource) {
+    history.pushState({ tier: 'pk' }, '', ''); // [新增] 導航紀錄
     screens.pk.classList.remove('hidden');
     const chatHistory = document.getElementById('chat-history');
     chatHistory.innerHTML = ''; 
@@ -1266,6 +1217,7 @@ function showScreen(name) {
 }
 
 function openEditor(mode, data = null) {
+    history.pushState({ tier: 'editor' }, '', ''); // [新增] 導航紀錄
     currentMode = mode;
     
     // 如果有傳入 data，代表是編輯模式；否則為新增模式
@@ -1438,7 +1390,7 @@ function createSettingsHTML() {
 
     // 事件綁定
     document.getElementById('btn-close-settings').addEventListener('click', () => {
-        document.getElementById('settings-modal').classList.add('hidden');
+        history.back();
     });
 
     document.getElementById('btn-save-setting-key').addEventListener('click', () => {
@@ -1479,6 +1431,7 @@ function injectSettingsButton() {
             btnSettings.style.cssText = "background:none; border:none; cursor:pointer; padding:8px;";
             
             btnSettings.addEventListener('click', () => {
+                history.pushState({ tier: 'settings' }, '', '');
                 createSettingsHTML();
                 const modal = document.getElementById('settings-modal');
                 modal.classList.remove('hidden');
@@ -1572,7 +1525,7 @@ function createWarehouseHTML() {
     if(wrapper) wrapper.insertAdjacentHTML('beforeend', warehouseHTML);
 
     document.getElementById('btn-close-warehouse').addEventListener('click', () => {
-        document.getElementById('warehouse-modal').classList.add('hidden');
+        history.back();
     });
 
     const resetFilter = () => { currentWarehouseScoreFilter = 0; };
@@ -2021,3 +1974,56 @@ function getRankTitle(score) {
     if (score <= 500) return "巨龍獵人";
     return "神之守望者";
 }
+
+// --- 頁面導航系統 (History API) ---
+// 統一管理上一頁行為，確保不會直接關閉 APP
+
+function setupNavigation() {
+    // 1. 初始化當前狀態為首頁
+    history.replaceState({ tier: 'home' }, '', '');
+
+    // 2. 監聽瀏覽器上一頁事件 (包含手機手勢)
+    window.addEventListener('popstate', (e) => {
+        const tier = e.state?.tier;
+        
+        // A. 先隱藏所有第 2、3 階視窗
+        if(screens.editor) screens.editor.classList.add('hidden');
+        if(screens.pk) screens.pk.classList.add('hidden');
+        if(screens.warehouse) screens.warehouse.classList.add('hidden');
+        
+        const searchModal = document.getElementById('search-modal');
+        if(searchModal) searchModal.classList.add('hidden');
+        
+        const settingsModal = document.getElementById('settings-modal');
+        if(settingsModal) settingsModal.classList.add('hidden');
+
+        // B. 根據 tier 顯示對應視窗
+        if (!tier || tier === 'home') {
+            // 回到首頁 (上面已經全部隱藏了，所以這裡不用做什麼)
+        } 
+        else if (tier === 'warehouse') {
+            if(screens.warehouse) {
+                screens.warehouse.classList.remove('hidden');
+                // 回到倉庫時，重新整理目前的分頁資料 (確保資料同步)
+                const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
+                                   document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
+                loadWarehouseData(currentTab);
+            }
+        } 
+        else if (tier === 'editor') {
+            if(screens.editor) screens.editor.classList.remove('hidden');
+        } 
+        else if (tier === 'search') {
+            if(searchModal) searchModal.classList.remove('hidden');
+        } 
+        else if (tier === 'settings') {
+            if(settingsModal) settingsModal.classList.remove('hidden');
+        } 
+        else if (tier === 'pk') {
+            if(screens.pk) screens.pk.classList.remove('hidden');
+        }
+    });
+}
+
+// 啟動導航監聽
+setupNavigation();
