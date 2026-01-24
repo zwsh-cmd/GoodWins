@@ -39,6 +39,7 @@ function createEditorHTML() {
 
     // [修改] 1. 增加 btn-start-pk 按鈕 (預設 display:none) 
     // [修改] 2. 調整按鈕區域佈局
+    // [修改] 3. 加大標籤與選項文字大小
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
@@ -60,7 +61,7 @@ function createEditorHTML() {
             
             <div style="padding:20px 0;">
                 <div style="margin-bottom:15px;">
-                    <label id="label-score" style="font-size:13px; color:#999; display:block; margin-bottom:5px;">好事等級</label>
+                    <label id="label-score" style="font-size:15px; color:#999; display:block; margin-bottom:8px; font-weight:bold;">好事等級</label>
                     <select id="input-score" style="${selectStyle}">
                         <option value="1">1分 - 微好事 (Micro)</option>
                         <option value="2">2分 - 小好事 (Small)</option>
@@ -70,7 +71,7 @@ function createEditorHTML() {
                     </select>
                 </div>
                 <div>
-                    <label style="font-size:13px; color:#999; display:block; margin-bottom:5px;">來源</label>
+                    <label style="font-size:15px; color:#999; display:block; margin-bottom:8px; font-weight:bold;">來源</label>
                     <select id="input-source" style="${selectStyle}">
                         <option value="personal">個人經驗</option>
                         <option value="inference">推論觀察</option>
@@ -196,6 +197,7 @@ function createPKScreenHTML() {
     // [修改] 1. 卡片 padding-bottom 改為 0，讓底部深色區域貼底
     // [修改] 2. expand-arrow 改為深色背景區塊，防誤觸
     // [修改] 3. btn-re-pk 改為灰色半透明，使用簡單圖示
+    // [修改] 4. chat-input 字體改為 16px
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
@@ -235,7 +237,7 @@ function createPKScreenHTML() {
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02);">
                 <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF;">
-                    <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main);">
+                    <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 16px;">
                     <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
@@ -362,6 +364,12 @@ function createPKScreenHTML() {
             btnRePK.addEventListener('click', async () => {
                 if(confirm("確定要重新發起 PK 挑戰嗎？")) {
                     
+                    // [新增] 扣除之前贏的分數 (如果有的話)
+                    if(currentPKContext.bad && currentPKContext.bad.score) {
+                        await updateUserScore(-(currentPKContext.bad.score));
+                        console.log("Re-PK: 已扣除先前分數");
+                    }
+
                     // [新增] 關鍵邏輯：切換身分證
                     // 從「回顧模式 (pk_wins)」強制切換回「戰鬥模式 (bad_things)」
                     // 這樣如果中途離開，系統才會執行「失敗歸檔」邏輯
@@ -395,8 +403,8 @@ function createPKScreenHTML() {
                                  document.getElementById('pk-good-title').innerText = newGood.title;
                                  document.getElementById('pk-good-content').innerText = newGood.content;
                                  
-                                 // 3. AI 進行新一輪說明
-                                 const prompt = `【系統指令：使用者選擇重來一次。目前已選出新好事卡（標題：${newGood.title}）。請保留之前的對話脈絡，但針對這張新卡片重新執行模式一：進行價值辯論。】`;
+                                 // 3. AI 進行新一輪說明 (絕對不提舊事)
+                                 const prompt = `【系統指令：使用者選擇重來一次。目前已選出新好事卡（標題：${newGood.title}）。請保留之前的對話脈絡，但**絕對不要**提及或回應上一次的PK結果。請針對這張新卡片重新執行模式一：進行價值辯論。】`;
                                  await callGeminiChat(prompt, true); 
                              } else {
                                  addChatMessage('ai', "我找不更好的好事了，但我依然守護在你身後。");
@@ -1016,8 +1024,8 @@ async function startPK(data, collectionSource, options = {}) {
                     // 1. 寫入分隔線 (存檔)
                     await addChatMessage('system', "────── 重新開始戰局 ──────", true);
                     
-                    // 2. 指令：忽略舊結果，針對新卡片重新說服
-                    const prompt = `【系統指令：使用者重新發起了戰局。雖然保留了舊紀錄供參考，但請忽略之前的輸贏結果。系統已重新選出一張新的好事卡（標題：${selectedGoodThing.title}）。請直接針對這張新卡片進行價值辯論，不需要開場白說「我們重新開始吧」，直接切入論點，嘗試說服使用者。】`;
+                    // 2. 指令：忽略舊結果，針對新卡片重新說服 (加強語氣)
+                    const prompt = `【系統指令：使用者重新發起了戰局。雖然保留了舊紀錄供參考，但請**完全忽略**之前的輸贏結果或對話結論。系統已重新選出一張新的好事卡（標題：${selectedGoodThing.title}）。請直接針對這張新卡片進行價值辯論，**不要**說「我們重新開始吧」或「上次如何」，直接切入新的比較論點，嘗試說服使用者。】`;
                     await callGeminiChat(prompt, true);
                 } else {
                     // 情境：全新開局
@@ -1740,7 +1748,6 @@ function createWarehouseHTML() {
     wrapper.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             currentWarehouseScoreFilter = parseInt(e.target.dataset.score);
-            // 找出目前的 Tab
             const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
                                document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
             loadWarehouseData(currentTab);
@@ -1778,6 +1785,11 @@ function createWarehouseHTML() {
                      const winDoc = await getDoc(doc(db, 'pk_wins', id));
                      if (winDoc.exists()) {
                          const data = winDoc.data();
+                         
+                         // [新增] 扣除分數
+                         const winScore = data.score || 1;
+                         await updateUserScore(-winScore);
+
                          // 2. 清除對應鳥事卡的對話紀錄，並重置狀態
                          // 注意：這裡只會清空對話紀錄，絕對不會刪除鳥事卡
                          if (data.originalBadId) {
@@ -1820,6 +1832,13 @@ function createWarehouseHTML() {
 
                     const docSnap = await getDoc(doc(db, 'bad_things', id));
                     if (docSnap.exists()) {
+                        
+                        // [新增] 再擊敗也要先扣分 (視為尚未勝利)
+                        if (winSnap.exists()) {
+                            const oldScore = winSnap.data().score || 1;
+                            await updateUserScore(-oldScore);
+                        }
+
                         // 傳入 isReDefeat: true 與排除標題
                         startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things', { 
                             isReDefeat: true, 
@@ -2147,10 +2166,11 @@ async function handlePKResult(winner) {
             showSystemMessage("勝利紀錄儲存失敗：" + e.message);
         }
 
-        // 3. 顯示勝利訊息 (不呼叫 AI，訊息寫入紀錄)
+        // 3. 顯示勝利訊息 (不呼叫真 AI，使用假 AI 恭喜)
         showSystemMessage(`🎉 PK 勝利！\n\n已存入勝利庫\n獲得積分：+${scoreToAdd}\n目前總分：${newTotal}\n當前稱號：${rankTitle}`);
-        // [修正] saveToDb = true
-        addChatMessage('system', "恭喜！您已成功擊敗鳥事，這場對話已歸檔至勝利庫。", true);
+        
+        // [修正] 假裝是 AI 說的話 (role='ai')，但不扣 Token
+        addChatMessage('ai', "恭喜！能夠戰勝這件鳥事，代表你又變得更強大了。這場勝利已為你保留。", true);
     }
 }
 
