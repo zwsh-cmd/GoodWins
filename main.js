@@ -38,27 +38,26 @@ function createEditorHTML() {
         appearance: none;
     `;
 
-    // [修改] 1. 移除 PK 按鈕的火焰 icon
+    // [修改] 1. 移除輸入框 placeholder (提示字詞)
+    // [修改] 2. PK 按鈕移至內容下方，改為透明圓角樣式
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
                 <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
-                <div style="display:flex; gap:10px;">
-                    <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
-                    <button id="btn-start-pk" style="display:none; background:var(--primary); border:none; color:#FFF; padding:6px 16px; border-radius:16px; font-weight:700; font-size:14px; cursor:pointer;">PK</button>
-                </div>
+                <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
             </div>
 
-            <style>
-                #input-title::placeholder, #input-content::placeholder { color: #CCC; opacity: 1; }
-            </style>
-            <input id="input-title" type="text" placeholder="輸入標題..." autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:#666; margin-bottom:10px;">
+            <input id="input-title" type="text" autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:#666; margin-bottom:10px;">
             
-            <textarea id="input-content" placeholder="輸入內容..." name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
+            <textarea id="input-content" name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
             
-            <div style="padding:20px 0;">
+            <div style="padding:10px 0; display:flex; justify-content:flex-end;">
+                <button id="btn-start-pk" style="display:none; background:transparent; border:1px solid var(--primary); color:var(--primary); padding:6px 20px; border-radius:50px; font-weight:700; font-size:14px; cursor:pointer;">開始PK</button>
+            </div>
+
+            <div style="padding:10px 0 20px 0;">
                 <div style="margin-bottom:15px;">
                     <label id="label-score" style="font-size:15px; color:#999; display:block; margin-bottom:8px; font-weight:bold;">好事等級</label>
                     <select id="input-score" style="${selectStyle}">
@@ -193,9 +192,6 @@ function showConfirmMessage(msg, okText = "確定", cancelText = "取消") {
 function createPKScreenHTML() {
     if (document.getElementById('pk-screen')) return;
 
-    // [修改] 1. 卡片 padding-bottom 改為 0，讓底部深色區域貼底
-    // [修改] 2. expand-arrow 改為深色背景區塊，防誤觸
-    // [修改] 3. btn-re-pk 改為灰色半透明，使用簡單圖示
     // [修改] 4. chat-input 字體改為 14px (與對話紀錄一致)
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
@@ -432,11 +428,16 @@ let currentWarehouseScoreFilter = 0; // [新增] 倉庫分數篩選 (0=全部)
 function createSearchHTML() {
     if (document.getElementById('search-modal')) return;
 
+    // 定義 Icon SVG (與倉庫風格一致)
+    const iconEdit = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
+    const iconReview = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#FBC02D; stroke-width:2;" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+
+    // [修改] 移除輸入框 placeholder
     const searchHTML = `
     <div id="search-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:400; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; gap: 10px; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
             <div style="position:relative; flex:1;">
-                <input id="input-search-keyword" type="text" placeholder="搜尋標題或內容..." style="width:100%; padding:10px 10px 10px 36px; border:1px solid #EEE; border-radius:20px; background:#F5F5F5; font-size:14px; outline:none;">
+                <input id="input-search-keyword" type="text" autocomplete="off" style="width:100%; padding:10px 10px 10px 36px; border:1px solid #EEE; border-radius:20px; background:#F5F5F5; font-size:14px; outline:none;">
                 <div style="position:absolute; left:12px; top:50%; transform:translateY(-50%); opacity:0.3; filter:grayscale(100%);">🔍</div>
             </div>
             <button id="btn-close-search" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#666;">關閉</button>
@@ -453,7 +454,6 @@ function createSearchHTML() {
         history.back();
     });
 
-    // 搜尋功能
     const input = document.getElementById('input-search-keyword');
     const resultList = document.getElementById('search-results-list');
     let searchTimeout;
@@ -472,7 +472,6 @@ function createSearchHTML() {
             resultList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">搜尋中...</div>';
             
             try {
-                // [修改] 同時搜尋好事、鳥事、PK勝利
                 const p1 = getDocs(query(collection(db, "bad_things"), orderBy("createdAt", "desc"), limit(30)));
                 const p2 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(30)));
                 const p3 = getDocs(query(collection(db, "pk_wins"), orderBy("createdAt", "desc"), limit(30)));
@@ -495,7 +494,6 @@ function createSearchHTML() {
                 });
                 winSnap.forEach(doc => {
                     const d = doc.data();
-                    // 勝利紀錄搜尋好壞事的標題
                     if (d.badTitle.toLowerCase().includes(keyword) || d.goodTitle.toLowerCase().includes(keyword)) {
                         results.push({ id: doc.id, ...d, type: 'wins' });
                     }
@@ -513,52 +511,41 @@ function createSearchHTML() {
                     let actionBtnHTML = '';
                     let title = item.title;
                     let content = item.content;
+                    const btnStyle = `width:28px; height:28px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;`;
 
                     if (item.type === 'bad') {
                         color = 'var(--bad-icon)';
                         typeLabel = '鳥事';
                         title = item.title;
                         content = item.content;
-                        // [新增] 修改按鈕
-                        actionBtnHTML = `<button onclick="openEditor('bad', {id:'${item.id}', title:'${item.title.replace(/'/g, "\\'")}', content:'${item.content.replace(/\r\n/g, "\\n").replace(/'/g, "\\'")}', score:${item.score}, source:'${item.source}'})" style="margin-top:8px; border:1px solid #EEE; background:#FFF; color:#666; padding:4px 12px; border-radius:12px; cursor:pointer; font-size:12px;">修改</button>`;
+                        // [修改] 改用圖示按鈕 (修改)
+                        actionBtnHTML = `<button class="btn-search-action" data-action="edit" data-id="${item.id}" data-type="${item.type}" style="${btnStyle}" title="修改">${iconEdit}</button>`;
                     } else if (item.type === 'good') {
                         color = 'var(--good-icon)';
                         typeLabel = '好事';
                         title = item.title;
                         content = item.content;
-                        // [新增] 修改按鈕
-                        actionBtnHTML = `<button onclick="openEditor('good', {id:'${item.id}', title:'${item.title.replace(/'/g, "\\'")}', content:'${item.content.replace(/\r\n/g, "\\n").replace(/'/g, "\\'")}', score:${item.score}, source:'${item.source}'})" style="margin-top:8px; border:1px solid #EEE; background:#FFF; color:#666; padding:4px 12px; border-radius:12px; cursor:pointer; font-size:12px;">修改</button>`;
+                        // [修改] 改用圖示按鈕 (修改)
+                        actionBtnHTML = `<button class="btn-search-action" data-action="edit" data-id="${item.id}" data-type="${item.type}" style="${btnStyle}" title="修改">${iconEdit}</button>`;
                     } else if (item.type === 'wins') {
                         color = '#E0C060';
                         typeLabel = 'PK勝利';
                         title = `擊敗「${item.badTitle}」`;
                         content = `戰友：${item.goodTitle}`;
-                        // [新增] 回顧勝利按鈕 (淺黃色)
-                        // 注意：這裡使用全域函式或需要確保 startPK 可用，這裡使用 onclick 需要傳遞參數較複雜，
-                        // 我們改用 dataset 綁定事件會比較乾淨，但為了配合 innerHTML 結構，我們直接用 inline onclick 呼叫全域函式。
-                        // 為了讓 startPK 能被呼叫，我們假設 startPK 是全域的。
-                        // 但為了安全，我們將資料存在 dataset，並用統一監聽器處理 (下方實作)。
-                        // 這裡為了簡便，我們用一個特殊的 class 來識別點擊。
+                        // [修改] 改用圖示按鈕 (回顧)
+                        actionBtnHTML = `<button class="btn-search-action" data-action="review" data-id="${item.id}" style="${btnStyle}" title="回顧勝利">${iconReview}</button>`;
                     }
 
-                    const safeTitle = (title || "").replace(/'/g, "\\'");
-                    
-                    let html = `
-                        <div class="search-item" data-id="${item.id}" data-type="${item.type}" 
-                             style="background:#FFF; padding:15px; border-radius:12px; border:1px solid #F0F0F0; border-left:4px solid ${color};">
-                            <div style="font-size:10px; color:${color}; font-weight:bold; margin-bottom:2px;">${typeLabel}</div>
-                            <div style="font-weight:bold; color:#333; margin-bottom:4px;">${title}</div>
-                            <div style="font-size:12px; color:#999; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${content}</div>
-                            <div style="display:flex; justify-content:flex-end;">
+                    const html = `
+                        <div class="search-item" style="background:#FFF; padding:15px; border-radius:12px; border:1px solid #F0F0F0; border-left:4px solid ${color}; display:flex; align-items:center; gap:10px;">
+                            <div style="flex:1; overflow:hidden;">
+                                <div style="font-size:10px; color:${color}; font-weight:bold; margin-bottom:2px;">${typeLabel}</div>
+                                <div style="font-weight:bold; color:#333; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title}</div>
+                                <div style="font-size:12px; color:#999; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden;">${content}</div>
+                            </div>
+                            <div>${actionBtnHTML}</div>
+                        </div>
                     `;
-
-                    if (item.type === 'wins') {
-                        html += `<button class="btn-search-action" data-action="review" data-id="${item.id}" style="margin-top:8px; border:none; background:#FFF9C4; color:#FBC02D; padding:6px 14px; border-radius:12px; cursor:pointer; font-size:12px; font-weight:bold;">回顧勝利</button>`;
-                    } else {
-                        html += `<button class="btn-search-action" data-action="edit" data-id="${item.id}" data-type="${item.type}" style="margin-top:8px; border:1px solid #EEE; background:#FFF; color:#666; padding:6px 14px; border-radius:12px; cursor:pointer; font-size:12px;">修改</button>`;
-                    }
-
-                    html += `</div></div>`;
                     resultList.insertAdjacentHTML('beforeend', html);
                 });
 
@@ -569,7 +556,6 @@ function createSearchHTML() {
         }, 500);
     });
 
-    // [新增] 搜尋結果按鈕的事件代理
     resultList.addEventListener('click', async (e) => {
         const btn = e.target.closest('.btn-search-action');
         if (!btn) return;
@@ -590,7 +576,7 @@ function createSearchHTML() {
             try {
                 const docSnap = await getDoc(doc(db, 'pk_wins', id));
                 if (docSnap.exists()) {
-                    document.getElementById('search-modal').classList.add('hidden'); // 關閉搜尋
+                    document.getElementById('search-modal').classList.add('hidden'); 
                     startPK({ id: docSnap.id, ...docSnap.data() }, 'pk_wins');
                 }
             } catch(e) { console.error(e); }
@@ -1703,8 +1689,10 @@ injectSettingsButton();
 function createWarehouseHTML() {
     if (document.getElementById('warehouse-modal')) return;
 
-    // [修改] 增加 filter-row 分數篩選列
-    // [修改] 增加星星與閃電 icon
+    // [修改] 使用 SVG 圖示
+    const iconStar = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom; margin-right:4px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+    const iconLightning = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
+
     const warehouseHTML = `
     <div id="warehouse-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:200; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -1712,9 +1700,9 @@ function createWarehouseHTML() {
             <button id="btn-close-warehouse" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">關閉</button>
         </header>
         <div style="padding: 10px 20px 0 20px; display: flex; gap: 8px; overflow-x: auto;">
-            <button id="tab-wins" style="flex: 1; min-width:80px; padding: 10px 5px; border: 1px solid #FBC02D; border-radius: 10px; background: #FFF9C4; color: #FBC02D; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
-            <button id="tab-good" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">★ 好事庫</button>
-            <button id="tab-bad" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">⚡ 待PK鳥事</button>
+            <button id="tab-wins" style="flex: 1; min-width:90px; padding: 10px 5px; border: 1px solid #FBC02D; border-radius: 10px; background: #FFF9C4; color: #FBC02D; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
+            <button id="tab-good" style="flex: 1; min-width:90px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">${iconStar}好事庫</button>
+            <button id="tab-bad" style="flex: 1; min-width:90px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">${iconLightning}待PK鳥事</button>
         </div>
         
         <div id="filter-row" style="padding: 10px 20px; display: flex; gap: 8px; overflow-x: auto; align-items:center;">
