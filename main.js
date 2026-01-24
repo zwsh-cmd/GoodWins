@@ -414,11 +414,18 @@ function createPKScreenHTML() {
                              addChatMessage('system', "────── 重新開始戰局 ──────", true);
                              addChatMessage('system', "正在重新調度好事資源...", false);
                              
-                             // 2. 重新抽卡 (排除目前這張)
+                             // 2. 重新抽卡 (排除目前這張 + 本局所有出現過的 + 歷史勝利的)
                              const docs = querySnapshot.docs;
-                             const excludeTitle = currentPKContext.good?.title; // 紀錄目前的好事標題
                              
-                             const newGood = await aiPickBestCard(currentPKContext.bad, docs, excludeTitle);
+                             // [核心修正] 把目前這張好事的 ID 加入「已展示清單」
+                             if (currentPKContext.good?.id) {
+                                 currentPKContext.shownGoodCardIds.push(currentPKContext.good.id);
+                             }
+
+                             // 合併「歷史標題」與「本局 ID」作為總排除名單
+                             const fullExcludes = [...(currentPKContext.excludeTitles || []), ...currentPKContext.shownGoodCardIds];
+                             
+                             const newGood = await aiPickBestCard(currentPKContext.bad, docs, fullExcludes);
                              
                              if (newGood) {
                                  currentPKContext.good = newGood;
@@ -847,7 +854,7 @@ let currentPKContext = { bad: null, good: null };
 
 // --- PK 核心邏輯 (保存對話版) ---
 
-// [修正] AI 智慧選牌模組：支援排除卡片、低分剋高分邏輯
+// [修正] AI 智慧選牌模組：支援 ID 排除、低分剋高分邏輯
 async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey || candidateDocs.length === 0) return null;
@@ -857,14 +864,20 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     // [修改] 支援陣列或單一字串的排除清單
     const excludes = Array.isArray(excludeList) ? excludeList : (excludeList ? [excludeList] : []);
 
-    // 過濾掉在排除清單中的卡片
-    const filteredDocs = candidateDocs.filter(doc => !excludes.includes(doc.data().title));
+    // [核心修正] 過濾邏輯：同時檢查 ID 與 Title 是否在排除清單中
+    // 這樣可以同時支援「歷史標題排除」與「當前對話 ID 排除」
+    const filteredDocs = candidateDocs.filter(doc => {
+        const data = doc.data();
+        const isExcludedById = excludes.includes(doc.id);
+        const isExcludedByTitle = excludes.includes(data.title);
+        return !isExcludedById && !isExcludedByTitle;
+    });
 
-    // 如果濾完沒牌了，只好從原名單隨機挑一張 (但盡量避開完全一樣的)
+    // 如果濾完沒牌了，只好從原名單隨機挑一張
     if (filteredDocs.length === 0) {
         if (candidateDocs.length > 0) {
              const randomDoc = candidateDocs[Math.floor(Math.random() * candidateDocs.length)];
-             return randomDoc.data();
+             return { id: randomDoc.id, ...randomDoc.data() }; // 回傳含 ID
         }
         return null;
     }
@@ -895,7 +908,7 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     3. 價值翻轉：選擇長期價值遠高於眼前損失的事件。
 
     【選牌最高指導原則】
-    1. **避免重複**：清單中已預先排除了最近 5 次用過的卡片，請從剩下的選項中挑選。
+    1. **避免重複**：清單中已預先排除了最近 10 次用過的卡片，請從剩下的選項中挑選。
     2. **以柔克剛 (David vs. Goliath)**：
        - 若有「好事等級 <= 鳥事等級」的卡片，且內容足以達成說服效果，請優先選擇。
        - 理由：如果能用一件「微小的好事（日常平淡的快樂）」就抵銷掉「巨大的鳥事」，代表好事的本質力量更強大。
@@ -929,7 +942,8 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
             if (selectedId) {
                 // 從過濾後的清單中找
                 const bestDoc = filteredDocs.find(doc => doc.id === selectedId);
-                return bestDoc ? bestDoc.data() : null;
+                // [核心修正] 務必回傳 ID，讓外層可以記錄到 excludeList
+                return bestDoc ? { id: bestDoc.id, ...bestDoc.data() } : null;
             }
         } catch (e) {
             console.warn(`[選牌] 模型 ${model.id} 失敗，嘗試下一個...`, e.message);
@@ -952,6 +966,7 @@ async function startPK(data, collectionSource, options = {}) {
     // [核心修正] winId 初始化邏輯：
     // 如果是從「再擊敗」進來 (collectionSource 是 bad_things)，但 options 裡有 associatedWinId，
     // 我們就使用那個 ID。這樣在 btnExitPK 的刪除邏輯中，就能抓到這張該刪的勝利卡。
+    // [核心修正] 初始化 PK 上下文，加入 shownGoodCardIds 用於同場對話不重複
     currentPKContext = {
         docId: data.id,
         collection: collectionSource,
@@ -962,8 +977,9 @@ async function startPK(data, collectionSource, options = {}) {
         good: null,
         chatLogs: data.chatLogs || [],
         isVictory: false,
-        // [新增] 紀錄該場勝利獲得的分數，以便重新PK時扣除 (若非勝利紀錄則為 0)
-        pointsToDeduct: (collectionSource === 'pk_wins' ? (data.score || 0) : 0)
+        pointsToDeduct: (collectionSource === 'pk_wins' ? (data.score || 0) : 0),
+        shownGoodCardIds: [], // [新增] 紀錄本場對話出現過的好事卡 ID
+        excludeTitles: []     // [新增] 紀錄歷史勝利的好事卡標題
     };
 
     if (collectionSource === 'pk_wins') {
@@ -1014,9 +1030,9 @@ async function startPK(data, collectionSource, options = {}) {
         document.getElementById('pk-good-content').innerText = "正在從資料庫挑選最佳策略...";
         
         try {
-            // [修改] 1. 同時讀取好事庫與最近5筆勝利紀錄(用於排除重複)
+            // [修改] 1. 讀取好事庫(20) & 勝利紀錄擴大到 10 筆 (滿足使用者需求)
             const p1 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(20)));
-            const p2 = getDocs(query(collection(db, "pk_wins"), orderBy("createdAt", "desc"), limit(5)));
+            const p2 = getDocs(query(collection(db, "pk_wins"), orderBy("createdAt", "desc"), limit(10)));
             
             const [querySnapshot, winsSnapshot] = await Promise.all([p1, p2]);
 
@@ -1030,14 +1046,15 @@ async function startPK(data, collectionSource, options = {}) {
                 loadingMsg.style.cssText = "text-align:center; font-size:12px; color:#999; margin:10px 0;";
                 chatHistory.appendChild(loadingMsg);
 
-                // [修改] 建立排除清單：最近5次勝利的好事 + 本次對話上下文的舊好事
-                let excludeList = winsSnapshot.docs.map(d => d.data().goodTitle);
+                // [修改] 建立排除清單：10次勝利標題 + 選項排除標題
+                // 這些是「歷史排除」
+                currentPKContext.excludeTitles = winsSnapshot.docs.map(d => d.data().goodTitle);
                 
-                const currentExclude = options.excludeGoodTitle || data.goodTitle;
-                if (currentExclude) excludeList.push(currentExclude);
+                const optionExclude = options.excludeGoodTitle || data.goodTitle;
+                if (optionExclude) currentPKContext.excludeTitles.push(optionExclude);
                 
-                // 傳入陣列給選牌函式
-                selectedGoodThing = await aiPickBestCard(data, docs, excludeList);
+                // 呼叫選牌：傳入歷史排除清單
+                selectedGoodThing = await aiPickBestCard(data, docs, currentPKContext.excludeTitles);
 
                 if (selectedGoodThing === "AI_FAILED") {
                     const loadingEl = document.getElementById('ai-selecting-msg');
@@ -1056,6 +1073,11 @@ async function startPK(data, collectionSource, options = {}) {
                     return;
                 }
                 
+                // [核心修正] 記錄這張被選中的好事 ID
+                if (selectedGoodThing.id) {
+                    currentPKContext.shownGoodCardIds.push(selectedGoodThing.id);
+                }
+
                 currentPKContext.good = selectedGoodThing;
                 document.getElementById('pk-good-title').innerText = selectedGoodThing.title;
                 document.getElementById('pk-good-content').innerText = selectedGoodThing.content;
