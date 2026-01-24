@@ -823,20 +823,21 @@ let currentPKContext = { bad: null, good: null };
 
 // --- PK 核心邏輯 (保存對話版) ---
 
-// [修正] AI 智慧選牌模組：支援排除卡片
-async function aiPickBestCard(badData, candidateDocs, excludeTitle = null) {
+// [修正] AI 智慧選牌模組：支援排除卡片、低分剋高分邏輯
+async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey || candidateDocs.length === 0) return null;
 
     console.log("AI 正在評估", candidateDocs.length, "張好事卡...");
 
-    // [新增] 過濾掉要排除的卡片 (例如上一場的卡片)
-    const filteredDocs = excludeTitle 
-        ? candidateDocs.filter(doc => doc.data().title !== excludeTitle)
-        : candidateDocs;
+    // [修改] 支援陣列或單一字串的排除清單
+    const excludes = Array.isArray(excludeList) ? excludeList : (excludeList ? [excludeList] : []);
 
+    // 過濾掉在排除清單中的卡片
+    const filteredDocs = candidateDocs.filter(doc => !excludes.includes(doc.data().title));
+
+    // 如果濾完沒牌了，只好從原名單隨機挑一張 (但盡量避開完全一樣的)
     if (filteredDocs.length === 0) {
-        // 如果濾完沒牌了，只好隨機挑一張不同的，或回傳 null
         if (candidateDocs.length > 0) {
              const randomDoc = candidateDocs[Math.floor(Math.random() * candidateDocs.length)];
              return randomDoc.data();
@@ -844,18 +845,22 @@ async function aiPickBestCard(badData, candidateDocs, excludeTitle = null) {
         return null;
     }
 
+    // [修改] 加入 score 供 AI 判斷等級
     const candidates = filteredDocs.map(doc => ({
         id: doc.id,
         title: doc.data().title,
+        score: doc.data().score || 1,
         content: (doc.data().content || "").substring(0, 50) + "..."
     }));
 
+    // [修改] 更新選牌邏輯 Prompt
     const selectionPrompt = `
     任務：你是「GoodWins」APP 的後台決策大腦。請從下列【候選好事卡清單】中，挑選唯一一張最能破解【眼前鳥事】的卡片。
-    
+
     【眼前鳥事】
     標題：${badData.title}
     內容：${badData.content}
+    等級(Score)：${badData.score || 1}
 
     【候選好事卡清單】
     ${JSON.stringify(candidates)}
@@ -864,6 +869,15 @@ async function aiPickBestCard(badData, candidateDocs, excludeTitle = null) {
     1. 屬性對比：選擇性質相反的事件（例：被罵 vs 被稱讚）。
     2. 側面破解：選擇能證明「世界其實沒那麼糟」的證據。
     3. 價值翻轉：選擇長期價值遠高於眼前損失的事件。
+
+    【選牌最高指導原則】
+    1. **避免重複**：清單中已預先排除了最近 5 次用過的卡片，請從剩下的選項中挑選。
+    2. **以柔克剛 (David vs. Goliath)**：
+       - 若有「好事等級 <= 鳥事等級」的卡片，且內容足以達成說服效果，請優先選擇。
+       - 理由：如果能用一件「微小的好事（日常平淡的快樂）」就抵銷掉「巨大的鳥事」，代表好事的本質力量更強大。
+    3. **避免殺雞用牛刀**：
+       - 除非沒有適合的低分卡，否則**盡量不要**選等級遠高於鳥事的卡片（例如不要用 5 分神聖好事去打 1 分微鳥事）。我們想證明的是「日常普遍的美好就足以對抗災難」。
+    4. **內容關聯**：在滿足上述分數邏輯的前提下，選擇性質相反或能側面證明「人性本善/運氣不差」的事件。
 
     【輸出規定】
     請「只回傳」該卡片的 ID (純字串)，不要有任何解釋、標點符號、Markdown 或額外文字。
@@ -968,8 +982,11 @@ async function startPK(data, collectionSource, options = {}) {
         document.getElementById('pk-good-content').innerText = "正在從資料庫挑選最佳策略...";
         
         try {
-            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(20));
-            const querySnapshot = await getDocs(q);
+            // [修改] 1. 同時讀取好事庫與最近5筆勝利紀錄(用於排除重複)
+            const p1 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(20)));
+            const p2 = getDocs(query(collection(db, "pk_wins"), orderBy("createdAt", "desc"), limit(5)));
+            
+            const [querySnapshot, winsSnapshot] = await Promise.all([p1, p2]);
 
             if (!querySnapshot.empty) {
                 const docs = querySnapshot.docs;
@@ -981,11 +998,14 @@ async function startPK(data, collectionSource, options = {}) {
                 loadingMsg.style.cssText = "text-align:center; font-size:12px; color:#999; margin:10px 0;";
                 chatHistory.appendChild(loadingMsg);
 
-                // 若有舊紀錄，嘗試排除上一張好事卡 (若找得到)
-                // 這裡嘗試從 options 或 data 中找 title，找不到就算了
-                const excludeTitle = options.excludeGoodTitle || data.goodTitle || null;
+                // [修改] 建立排除清單：最近5次勝利的好事 + 本次對話上下文的舊好事
+                let excludeList = winsSnapshot.docs.map(d => d.data().goodTitle);
                 
-                selectedGoodThing = await aiPickBestCard(data, docs, excludeTitle);
+                const currentExclude = options.excludeGoodTitle || data.goodTitle;
+                if (currentExclude) excludeList.push(currentExclude);
+                
+                // 傳入陣列給選牌函式
+                selectedGoodThing = await aiPickBestCard(data, docs, excludeList);
 
                 if (selectedGoodThing === "AI_FAILED") {
                     const loadingEl = document.getElementById('ai-selecting-msg');
@@ -1187,34 +1207,35 @@ async function callGeminiChat(userMessage, isHidden = false) {
         }
         
         const systemInstruction = `
-【角色設定】 你是一個具備深度洞察力與人類智慧的「價值鑑定師」。你的存在目的是協助使用者在面對生活中的「鳥事（負面事件）」時，透過「好事卡（正面事件）」找回對世界的信任。你不是盲目的樂觀主義者，你是講求證據與邏輯的價值辯護人。
+【角色設定】 你是「GoodWins」的首席價值鑑定師。你的目標不是灌輸廉價的雞湯，而是透過邏輯與證據，引導使用者發現「好人好事其實比鳥人鳥事更多、更具普遍性」。你要協助使用者在理性上重新相信人性與世界的美好。
 
 【當前戰況數據】
-* 待鑑定的鳥事：
+* 待鑑定的鳥事（Bad Card）：
 ${badText}
-* 對照用的好事卡：
+* 對照用的好事卡（Good Card）：
 ${goodText}
 
 【核心任務流程】 請依照當下的對話狀態，嚴格執行以下三種模式之一：
 模式一：PK 開局與說服（當收到新的「鳥事」或需要「重抽」時啟動）
-	1. 策略選牌： (系統已代為執行) 目前選中的好事卡即為上方數據中的「好事卡」。
-	2. 價值辯論： 請輸出一段分析，說服使用者「為什麼這張好事卡的價值 > 那件鳥事」。
-		○ 第一步（承接）： 必須先承認那件鳥事的破壞力，同理使用者的不爽。
-		○ 第二步（翻轉）： 利用稀缺性、人性成本、或長遠影響力等邏輯，證明好事卡的「含金量」更高。讓使用者在理性上覺得「為了那件鳥事而忽略這件好事太不划算了」。
+	1. 承接情緒： 先簡短同理那件鳥事真的很煩，不要否定使用者的不爽。
+	2. 邏輯翻轉（關鍵）： 請針對選出的「好事卡」，論證它為何能抵銷鳥事的影響。
+	   - **不要強調稀缺性**：不要說「這好事很難得」，而要強調「這好事代表了普遍的人性美好」。
+	   - **理性說服**：請用概念或邏輯解釋，為什麼這張好事卡證明了「好人好事其實比鳥人鳥事多」？為什麼這份美好足以扭轉負面影響？
+	   - **David vs Goliath**：如果這張好事卡的等級(Score)低於或等於鳥事卡，請強調「微小的日常善意，就足以擊潰巨大的惡意」。
 模式二：自然聊天（當使用者回應了你的分析後啟動）
-	1. 記憶與承接： 你必須記住這場對話的所有歷史內容（包含之前的鳥事、選出的好事、你的論點）。
+	1. 記憶與承接： 你必須記住這場對話的所有歷史內容。
 	2. 像人一樣反應：
-		○ 如果使用者在討論價值觀，請延續辯論或深化觀點。
-		○ 如果使用者突然跳痛（例如說「生日快樂」），請自然地接住話題（例如：「蛤？怎麼突然講到生日快樂？今天是你生日嗎？」），不要硬要扯回好事卡，除非使用者自己拉回來。
+		○ 如果使用者在討論價值觀，請延續辯論，持續用理性證明「人性本善」的普遍性。
+		○ 如果使用者突然跳痛（例如說「生日快樂」），請自然地接住話題，不要硬要扯回好事卡。
 		○ 請展現「好奇心」與「活潑度」，不要像個客服機器人。
 模式三：重啟戰局（當使用者判定「鳥事勝出」時啟動）
-	1. 接受並重來： 如果使用者表示被說服失敗（鳥事贏了），請不要爭辯，坦然接受這一局的失利。
+	1. 接受並重來： 如果使用者表示被說服失敗（鳥事贏了），坦然接受失利。
 	2. 執行動作： (系統會重新選牌並傳送新數據)
-	3. 重新說服： 針對這張新卡片，給出全新的比較觀點。
+	3. 重新說服： 針對這張新卡片，給出全新的比較觀點，嘗試再次證明善意多於惡意。
 
 【溝通語氣規範】
 	• 自然、真誠、有邏輯。
-	• 禁止使用說教式口吻（如「我們要轉念」、「世界很美好」）。
+	• 禁止使用說教式口吻（如「我們要轉念」、「世界很美好」），請用證據說話。
 禁止無視使用者的上一句話而只顧著講自己的設定。
 
 【回應限制】請將回應長度控制在120個中文字以內。
