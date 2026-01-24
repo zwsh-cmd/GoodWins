@@ -240,7 +240,7 @@ function createPKScreenHTML() {
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', pkHTML);
         
-        // --- [修改] 展開箭頭邏輯 (全寬覆蓋模式) ---
+        // --- [修改] 展開箭頭邏輯 (全寬覆蓋模式 + 捲軸) ---
         wrapper.querySelectorAll('.expand-arrow').forEach(arrow => {
             arrow.addEventListener('click', (e) => {
                 e.stopPropagation(); // 阻止冒泡
@@ -249,7 +249,7 @@ function createPKScreenHTML() {
                 const p = card.querySelector('p');
                 const isExpanded = card.classList.contains('expanded-mode');
                 
-                // 找出另一張卡片 (為了隱藏它或處理層級)
+                // 找出另一張卡片 (為了隱藏它)
                 const isBad = card.id === 'btn-pk-bad';
                 const otherCard = isBad ? document.getElementById('btn-pk-good') : document.getElementById('btn-pk-bad');
 
@@ -263,6 +263,7 @@ function createPKScreenHTML() {
                     card.style.zIndex = '';
                     card.style.left = '';
                     card.style.top = '';
+                    card.style.overflowY = ''; // 清除捲軸
                     
                     // 顯示另一張卡
                     if(otherCard) otherCard.style.opacity = '1';
@@ -270,6 +271,12 @@ function createPKScreenHTML() {
                     if (p) {
                         p.style.webkitLineClamp = '3';
                         arrow.innerText = '▼';
+                        
+                        // 還原箭頭樣式
+                        arrow.style.position = '';
+                        arrow.style.bottom = '';
+                        arrow.style.background = 'rgba(0,0,0,0.05)';
+                        arrow.style.zIndex = '';
                     }
                 } else {
                     // --- 放大覆蓋模式 ---
@@ -279,8 +286,9 @@ function createPKScreenHTML() {
                     card.style.zIndex = '50';
                     card.style.top = '0';
                     card.style.left = '0';
-                    card.style.width = '100%'; // 填滿容器 (即延伸到左右邊界，扣除容器原本的 padding)
-                    card.style.height = '100%'; // 填滿高度
+                    card.style.width = '100%'; 
+                    card.style.height = '100%'; // 高度佔滿
+                    card.style.overflowY = 'auto'; // [重點] 允許內部捲動，確保長文可見
                     
                     // 隱藏另一張卡避免干擾
                     if(otherCard) otherCard.style.opacity = '0';
@@ -288,6 +296,15 @@ function createPKScreenHTML() {
                     if (p) {
                         p.style.webkitLineClamp = 'unset'; // 顯示全文
                         arrow.innerText = '▲';
+                        
+                        // [重點] 讓箭頭黏在底部，方便隨時收合
+                        arrow.style.position = 'sticky';
+                        arrow.style.bottom = '0';
+                        arrow.style.zIndex = '10';
+                        
+                        // 設定背景色遮擋文字，避免重疊 (依卡片類型設定顏色)
+                        if (isBad) arrow.style.background = 'var(--bad-light)';
+                        else arrow.style.background = 'var(--good-light)';
                     }
                 }
             });
@@ -1219,7 +1236,8 @@ ${goodText}
             console.log("使用者中斷了請求");
         } else {
             console.error(e);
-            addChatMessage('system', "程式錯誤：" + e.message);
+            // [修改] 無論是找不到模型、額度不足或網路錯誤，統一顯示友善訊息
+            addChatMessage('system', "目前找不到適合的AI模型，請稍後再試一次。");
         }
     } finally {
         currentAbortController = null;
