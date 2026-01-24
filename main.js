@@ -911,10 +911,13 @@ async function startPK(data, collectionSource, options = {}) {
 
     const btnRePk = document.getElementById('btn-re-pk');
 
+    // [核心修正] winId 初始化邏輯：
+    // 如果是從「再擊敗」進來 (collectionSource 是 bad_things)，但 options 裡有 associatedWinId，
+    // 我們就使用那個 ID。這樣在 btnExitPK 的刪除邏輯中，就能抓到這張該刪的勝利卡。
     currentPKContext = {
         docId: data.id,
         collection: collectionSource,
-        winId: collectionSource === 'pk_wins' ? data.id : null,
+        winId: options.associatedWinId || (collectionSource === 'pk_wins' ? data.id : null),
         originalBadId: data.originalBadId || null,
         wasDefeated: options.isReDefeat || data.isDefeated || false, 
         bad: null,
@@ -1840,6 +1843,7 @@ function createWarehouseHTML() {
                 document.getElementById('warehouse-modal').classList.add('hidden');
                 
                 if (winId) {
+                    // [修改] 再擊敗邏輯：讀取舊勝利以排除舊好事，並開啟新局
                     const winSnap = await getDoc(doc(db, 'pk_wins', winId));
                     let excludeTitle = null;
                     if (winSnap.exists()) {
@@ -1848,13 +1852,19 @@ function createWarehouseHTML() {
 
                     const docSnap = await getDoc(doc(db, 'bad_things', id));
                     if (docSnap.exists()) {
+                        
+                        // [新增] 再擊敗也要先扣分 (視為尚未勝利)
                         if (winSnap.exists()) {
                             const oldScore = winSnap.data().score || 1;
                             await updateUserScore(-oldScore);
                         }
+
+                        // [修正] 傳入 isReDefeat: true, 排除標題, 以及 **舊的勝利ID** (associatedWinId)
+                        // 這樣 startPK 才能記住這個 ID，若中途離開才能執行刪除
                         startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things', { 
                             isReDefeat: true, 
-                            excludeGoodTitle: excludeTitle 
+                            excludeGoodTitle: excludeTitle,
+                            associatedWinId: winId 
                         });
                         return;
                     }
