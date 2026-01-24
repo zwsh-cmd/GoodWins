@@ -23,7 +23,7 @@ const provider = new GoogleAuthProvider();
 function createEditorHTML() {
     if (document.getElementById('editor-modal')) return;
 
-    // [修改] 下拉選單文字加大至 17px
+    // [修改] 下拉選單文字加大至 19px
     const selectStyle = `
         width:100%; 
         padding:12px 40px 12px 12px; 
@@ -31,15 +31,14 @@ function createEditorHTML() {
         border-radius:12px; 
         background:#FAFAFA url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235A5A5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 16px center; 
         background-size: 16px;
-        font-size:17px; 
+        font-size:19px; 
         color:var(--text-main); 
         outline:none; 
         -webkit-appearance: none; 
         appearance: none;
     `;
 
-    // [修改] 1. 移除輸入框 placeholder (提示字詞)
-    // [修改] 2. PK 按鈕移至內容下方，改為透明圓角樣式
+    // [修改] 加入 style 標籤強制設定 option 字體大小
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
@@ -48,6 +47,10 @@ function createEditorHTML() {
                 <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
                 <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
             </div>
+
+            <style>
+                select option { font-size: 19px; }
+            </style>
 
             <input id="input-title" type="text" autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:#666; margin-bottom:10px;">
             
@@ -192,7 +195,7 @@ function showConfirmMessage(msg, okText = "確定", cancelText = "取消") {
 function createPKScreenHTML() {
     if (document.getElementById('pk-screen')) return;
 
-    // [修改] 4. chat-input 字體改為 14px (與對話紀錄一致)
+    // [修改] 4. chat-input 字體改為 13px (稍微縮小)
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
@@ -232,7 +235,7 @@ function createPKScreenHTML() {
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02);">
                 <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF;">
-                    <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 14px;">
+                    <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px;">
                     <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
@@ -1416,6 +1419,9 @@ async function restoreTrash(trashId) {
 
 // 產生垃圾桶畫面
 async function createTrashHTML() {
+    // 定義還原 Icon
+    const iconRestore = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#2196F3; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>`;
+
     const trashHTML = `
     <div id="trash-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:350; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -1447,32 +1453,53 @@ async function createTrashHTML() {
 
     snap.forEach(d => {
         const item = d.data();
-        let originName = '未知';
-        if(item.originCol === 'pk_wins') originName = 'PK勝利';
-        else if(item.originCol === 'good_things') originName = '好事';
-        else if(item.originCol === 'bad_things') originName = '鳥事';
+        let color = '#999';
+        let typeLabel = '';
+        let title = '';
+        let content = '';
 
-        const title = item.data.title || item.data.goodTitle || '無標題';
-        const score = item.data.score || 1;
+        if(item.originCol === 'pk_wins') {
+            color = '#E0C060';
+            typeLabel = 'PK勝利';
+            title = `擊敗「${item.data.badTitle}」`;
+            content = `戰友：${item.data.goodTitle}`;
+        } else if(item.originCol === 'good_things') {
+            color = 'var(--good-icon)';
+            typeLabel = '好事';
+            title = item.data.title;
+            content = item.data.content;
+        } else {
+            color = 'var(--bad-icon)';
+            typeLabel = '鳥事';
+            title = item.data.title;
+            content = item.data.content;
+        }
+
+        const btnStyle = `width:28px; height:28px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;`;
         
+        // [修改] 樣式與搜尋結果一致
         const div = document.createElement('div');
-        div.style.cssText = "background:#FFF; padding:15px; border-radius:12px; border:1px solid #EEE; display:flex; justify-content:space-between; align-items:center;";
+        div.className = "trash-item";
+        div.style.cssText = `background:#FFF; padding:15px; border-radius:12px; border:1px solid #F0F0F0; border-left:4px solid ${color}; display:flex; align-items:center; gap:10px;`;
         div.innerHTML = `
-            <div>
-                <div style="font-size:12px; color:#999; margin-bottom:4px;">${originName} <span style="margin-left:5px; color:#CCC;">|</span> 等級: ${score}</div>
-                <div style="font-weight:bold; color:#333;">${title}</div>
+            <div style="flex:1; overflow:hidden;">
+                <div style="font-size:10px; color:${color}; font-weight:bold; margin-bottom:2px;">${typeLabel}</div>
+                <div style="font-weight:bold; color:#333; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title}</div>
+                <div style="font-size:12px; color:#999; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden;">${content || ''}</div>
             </div>
-            <button class="btn-restore" data-id="${d.id}" style="background:#E3F2FD; color:#2196F3; border:none; padding:6px 12px; border-radius:15px; font-size:12px; cursor:pointer;">還原</button>
+            <div>
+                <button class="btn-restore" data-id="${d.id}" style="${btnStyle}" title="還原">${iconRestore}</button>
+            </div>
         `;
         listEl.appendChild(div);
     });
 
     listEl.querySelectorAll('.btn-restore').forEach(btn => {
         btn.addEventListener('click', async (e) => {
-            const id = e.target.dataset.id;
+            const id = e.target.closest('button').dataset.id;
             if(confirm("確定要還原此項目？")) {
                 await restoreTrash(id);
-                e.target.closest('div').remove();
+                e.target.closest('.trash-item').remove();
                 showSystemMessage("已還原");
             }
         });
@@ -1540,6 +1567,7 @@ async function importBackup(file) {
 function createSettingsHTML() {
     if (document.getElementById('settings-modal')) return;
 
+    // [修改] 移除垃圾桶按鈕前的 Emoji
     const settingsHTML = `
     <div id="settings-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:300; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -1568,7 +1596,7 @@ function createSettingsHTML() {
             <div style="background:#FFF; padding:20px; border-radius:12px; border:1px solid #EEE; margin-bottom:15px;">
                 <h3 style="margin:0 0 10px 0; font-size:16px; color:var(--text-main);">資料管理</h3>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <button id="btn-open-trash-list" style="width:100%; background:#FFF3E0; color:#E65100; border:1px solid #FFE0B2; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:bold; margin-bottom:10px;">🗑️ 開啟垃圾桶</button>
+                    <button id="btn-open-trash-list" style="width:100%; background:#FFF3E0; color:#E65100; border:1px solid #FFE0B2; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:bold; margin-bottom:10px;">開啟垃圾桶</button>
                     <button id="btn-export" style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:12px; border-radius:8px; cursor:pointer; font-size:15px;">匯出備份</button>
                     <label style="flex:1; background:#F5F5F5; color:#333; border:1px solid #DDD; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; text-align:center;">
                         匯入備份
@@ -1689,10 +1717,13 @@ injectSettingsButton();
 function createWarehouseHTML() {
     if (document.getElementById('warehouse-modal')) return;
 
-    // [修改] 使用 SVG 圖示
-    const iconStar = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom; margin-right:4px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
-    const iconLightning = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
+    // [修改] SVG 圖示 (顏色直接寫死在 stroke 中，確保不被文字顏色影響)
+    // 皇冠 (#FBC02D), 星星 (#7FB07F - Good Icon), 閃電 (#D48888 - Bad Icon)
+    const iconCrown = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FBC02D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom; margin-right:4px;"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"></path></svg>`;
+    const iconStar = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7FB07F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom; margin-right:4px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+    const iconLightning = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D48888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
 
+    // [修改] 增加皇冠、星星與閃電 icon
     const warehouseHTML = `
     <div id="warehouse-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:200; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -1700,7 +1731,7 @@ function createWarehouseHTML() {
             <button id="btn-close-warehouse" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">關閉</button>
         </header>
         <div style="padding: 10px 20px 0 20px; display: flex; gap: 8px; overflow-x: auto;">
-            <button id="tab-wins" style="flex: 1; min-width:90px; padding: 10px 5px; border: 1px solid #FBC02D; border-radius: 10px; background: #FFF9C4; color: #FBC02D; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
+            <button id="tab-wins" style="flex: 1; min-width:90px; padding: 10px 5px; border: 1px solid #FBC02D; border-radius: 10px; background: #FFF9C4; color: #FBC02D; font-weight: 700; cursor: pointer; font-size:13px;">${iconCrown}PK勝利</button>
             <button id="tab-good" style="flex: 1; min-width:90px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">${iconStar}好事庫</button>
             <button id="tab-bad" style="flex: 1; min-width:90px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">${iconLightning}待PK鳥事</button>
         </div>
@@ -1732,7 +1763,6 @@ function createWarehouseHTML() {
     document.getElementById('tab-good').addEventListener('click', () => { resetFilter(); loadWarehouseData('good'); });
     document.getElementById('tab-bad').addEventListener('click', () => { resetFilter(); loadWarehouseData('bad'); });
 
-    // [新增] 篩選按鈕事件
     wrapper.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             currentWarehouseScoreFilter = parseInt(e.target.dataset.score);
@@ -1745,55 +1775,45 @@ function createWarehouseHTML() {
     const listEl = document.getElementById('warehouse-list');
     listEl.addEventListener('click', async (e) => {
         const target = e.target;
-        // [修正] 往上尋找最近的 button，確保點擊 SVG 或 path 也能觸發
         const btn = target.closest('button');
         if (!btn) return;
 
         const action = btn.dataset.action;
         const id = btn.dataset.id;
         const winId = btn.dataset.winId; 
-        const type = btn.dataset.type; // [關鍵] 直接獲取類型 (wins, good, bad)，不再依賴顏色
+        const type = btn.dataset.type;
 
         if (!action || !id) return;
         
         try {
             if (action === 'delete') {
-                // [修改] 針對勝利紀錄顯示特定風格提示
                 let confirmMsg = '確定要刪除這張卡片嗎？';
                 if (type === 'wins') {
                     confirmMsg = '只刪除勝利紀錄與其對話紀錄，好事卡/鳥事卡仍保存在各倉庫中。';
                 }
 
-                // [修改] 使用自訂按鈕文字
                 const confirmed = await showConfirmMessage(confirmMsg, "確定刪除", "取消");
                 if (!confirmed) return;
 
                 if (type === 'wins') {
-                     // 1. 處理勝利紀錄
                      const winDoc = await getDoc(doc(db, 'pk_wins', id));
                      if (winDoc.exists()) {
                          const data = winDoc.data();
-                         
-                         // [新增] 扣除分數
                          const winScore = data.score || 1;
                          await updateUserScore(-winScore);
 
-                         // 2. 清除對應鳥事卡的對話紀錄，並重置狀態
-                         // 注意：這裡只會清空對話紀錄，絕對不會刪除鳥事卡
                          if (data.originalBadId) {
                              const badRef = doc(db, 'bad_things', data.originalBadId);
                              await updateDoc(badRef, {
                                  isDefeated: false,
                                  lastWinId: null,
-                                 chatLogs: [], // [關鍵] 清空關聯對話
+                                 chatLogs: [],
                                  updatedAt: serverTimestamp()
                              });
                          }
                      }
-                     // 3. 移動到垃圾桶 (取代直接刪除)
                      await moveToTrash('pk_wins', id);
                 } else {
-                    // 一般刪除：移動到垃圾桶
                     const collectionName = type === 'good' ? 'good_things' : 'bad_things';
                     await moveToTrash(collectionName, id);
                 }
@@ -1811,7 +1831,6 @@ function createWarehouseHTML() {
                 document.getElementById('warehouse-modal').classList.add('hidden');
                 
                 if (winId) {
-                    // [修改] 再擊敗邏輯：讀取舊勝利以排除舊好事，並開啟新局
                     const winSnap = await getDoc(doc(db, 'pk_wins', winId));
                     let excludeTitle = null;
                     if (winSnap.exists()) {
@@ -1820,14 +1839,10 @@ function createWarehouseHTML() {
 
                     const docSnap = await getDoc(doc(db, 'bad_things', id));
                     if (docSnap.exists()) {
-                        
-                        // [新增] 再擊敗也要先扣分 (視為尚未勝利)
                         if (winSnap.exists()) {
                             const oldScore = winSnap.data().score || 1;
                             await updateUserScore(-oldScore);
                         }
-
-                        // 傳入 isReDefeat: true 與排除標題
                         startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things', { 
                             isReDefeat: true, 
                             excludeGoodTitle: excludeTitle 
