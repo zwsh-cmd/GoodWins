@@ -312,12 +312,13 @@ let currentWarehouseScoreFilter = 0; // [新增] 倉庫分數篩選 (0=全部)
 function createSearchHTML() {
     if (document.getElementById('search-modal')) return;
 
+    // [修改] 圖示加上 opacity:0.3; filter:grayscale(100%); 去除顏色
     const searchHTML = `
     <div id="search-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:400; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; gap: 10px; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
             <div style="position:relative; flex:1;">
                 <input id="input-search-keyword" type="text" placeholder="搜尋標題或內容..." style="width:100%; padding:10px 10px 10px 36px; border:1px solid #EEE; border-radius:20px; background:#F5F5F5; font-size:14px; outline:none;">
-                <div style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#999;">🔍</div>
+                <div style="position:absolute; left:12px; top:50%; transform:translateY(-50%); opacity:0.3; filter:grayscale(100%);">🔍</div>
             </div>
             <button id="btn-close-search" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#666;">關閉</button>
         </header>
@@ -334,15 +335,24 @@ function createSearchHTML() {
         document.getElementById('search-modal').classList.add('hidden');
     });
 
-    // 搜尋邏輯 (按 Enter 觸發)
+    // [修改] 即時搜尋邏輯 (input 事件 + 防手震)
     const input = document.getElementById('input-search-keyword');
     const resultList = document.getElementById('search-results-list');
+    let searchTimeout;
 
-    input.addEventListener('keypress', async (e) => {
-        if (e.key === 'Enter') {
-            const keyword = input.value.trim().toLowerCase();
-            if (!keyword) return;
+    input.addEventListener('input', (e) => {
+        const keyword = input.value.trim().toLowerCase();
+        
+        // 清除上一次的等待
+        clearTimeout(searchTimeout);
 
+        if (!keyword) {
+            resultList.innerHTML = '<div style="text-align:center; color:#CCC; margin-top:50px; font-size:13px;">輸入關鍵字開始搜尋...</div>';
+            return;
+        }
+
+        // 延遲 500ms 後才執行搜尋，避免打字太快一直讀資料庫
+        searchTimeout = setTimeout(async () => {
             resultList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">搜尋中...</div>';
             
             try {
@@ -388,7 +398,7 @@ function createSearchHTML() {
             } catch(err) {
                 resultList.innerHTML = `<div style="text-align:center; color:red;">搜尋錯誤: ${err.message}</div>`;
             }
-        }
+        }, 500); // 500毫秒延遲
     });
 }
 createSearchHTML();
@@ -413,13 +423,15 @@ if(btnExitPK) {
         }
 
         // 2. [核心邏輯] 只要是鳥事PK且未勝利，離開就視為失敗（回到待PK庫）
-        // 這裡會強制將 isDefeated 設為 false
+        // [修正] 除了 isDefeated: false，還必須把 lastWinId 清空 (設為 null)
+        // 這樣才不會讓倉庫誤判為「已勝利」
         if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
             if (!currentPKContext.isVictory) {
                 try {
                     const docRef = doc(db, 'bad_things', currentPKContext.docId);
                     await updateDoc(docRef, {
                         isDefeated: false, 
+                        lastWinId: null, // [新增] 徹底清除勝利紀錄 ID
                         updatedAt: serverTimestamp()
                     });
                     console.log("PK中斷，已重置為待PK狀態");
@@ -784,15 +796,12 @@ async function startPK(data, collectionSource) {
 // --- 聊天功能模組 ---
 
 // 1. 在畫面上新增訊息，並同步儲存到資料庫
-// [修改] 增加 modelName 參數，用於顯示 AI 模型版本
 async function addChatMessage(sender, text, saveToDb = true, modelName = null) {
     const chatHistory = document.getElementById('chat-history');
     const msgDiv = document.createElement('div');
     
     if (sender === 'ai') {
-        // 如果有傳入 modelName，顯示如 "AI (Gemini 1.5 Pro)"，否則顯示 "AI"
         const nameLabel = modelName ? `AI (${modelName})` : "AI";
-        
         msgDiv.style.cssText = "align-self: flex-start; background: #F7F7F7; padding: 14px 16px; border-radius: 16px 16px 16px 4px; font-size: 14px; color: var(--text-main); line-height: 1.6; max-width: 85%;";
         msgDiv.innerHTML = `<div style="font-weight:700; font-size:12px; color:#AAA; margin-bottom:4px;">${nameLabel}</div>${text}`;
     } else if (sender === 'user') {
@@ -807,18 +816,17 @@ async function addChatMessage(sender, text, saveToDb = true, modelName = null) {
     chatHistory.scrollTop = chatHistory.scrollHeight; 
 
     // 儲存到 Firestore
-    if (saveToDb && currentPKContext.docId && sender !== 'system') {
+    // [修改] 移除了 sender !== 'system' 的限制，只要 saveToDb 為 true 就存
+    // 這樣「重新開始戰局」的分隔線就會被記錄
+    if (saveToDb && currentPKContext.docId) {
         try {
             const docRef = doc(db, currentPKContext.collection, currentPKContext.docId);
-            // [修改] 將 modelName 存入資料庫 (如果是 AI 的話)
             const newMessage = { role: sender, text: text, time: Date.now(), modelName: modelName };
             
-            // 使用 arrayUnion 加入陣列
             await updateDoc(docRef, {
                 chatLogs: arrayUnion(newMessage)
             });
             
-            // 更新本地上下文
             currentPKContext.chatLogs.push(newMessage);
         } catch (e) {
             console.error("Save chat error:", e);
@@ -1586,12 +1594,15 @@ async function loadWarehouseData(type) {
                 let btnDefeatText = "擊敗它";
                 let btnDefeatColor = "var(--primary)";
                 let extraTitle = "";
+                let winIdAttr = ""; // [新增] 預設為空
                 
                 if (data.isDefeated) {
                     btnDefeatText = "再擊敗";
                     btnDefeatColor = "#FF9800"; 
                     extraTitle = `<span style="font-size:12px; color:#4CAF50; margin-left:5px;">(已被擊敗)</span>`;
                     displayTitle = displayTitle + extraTitle;
+                    // [修正] 只有當真正已擊敗時，才允許綁定 winId
+                    winIdAttr = data.lastWinId || ""; 
                 }
 
                 // 擊敗按鈕也稍微加大高
@@ -1599,7 +1610,7 @@ async function loadWarehouseData(type) {
 
                 actionButtonsHTML = `
                     <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end; align-items:center;">
-                        <button data-action="defeat" data-id="${docId}" data-win-id="${data.lastWinId || ''}" style="${defeatBtnStyle}">${btnDefeatText}</button>
+                        <button data-action="defeat" data-id="${docId}" data-win-id="${winIdAttr}" style="${defeatBtnStyle}">${btnDefeatText}</button>
                         <button data-action="edit" data-id="${docId}" style="${btnStyle}" title="編輯">${iconEdit}</button>
                         <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
                     </div>
