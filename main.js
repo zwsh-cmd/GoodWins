@@ -1859,12 +1859,11 @@ function createWarehouseHTML() {
                             await updateUserScore(-oldScore);
                         }
 
-                        // [修正] 傳入 isReDefeat: true, 排除標題, 以及 **舊的勝利ID** (associatedWinId)
-                        // 這樣 startPK 才能記住這個 ID，若中途離開才能執行刪除
+                        // [修正] 補回 associatedWinId，讓系統知道這是哪張勝利紀錄，以便中途離開時刪除
                         startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things', { 
                             isReDefeat: true, 
                             excludeGoodTitle: excludeTitle,
-                            associatedWinId: winId 
+                            associatedWinId: winId  
                         });
                         return;
                     }
