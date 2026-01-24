@@ -106,6 +106,15 @@ if(mainHeaderTitle && !mainHeaderTitle.querySelector('img')) {
 
 // --- 新增：通用提示視窗元件 (取代原生 alert) & 確認視窗 ---
 function createGlobalComponents() {
+    // [修改] 1. 注入手機狀態列顏色 (與 APP 背景 #FAFAFA 一致)
+    let metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (!metaTheme) {
+        metaTheme = document.createElement('meta');
+        metaTheme.name = "theme-color";
+        document.head.appendChild(metaTheme);
+    }
+    metaTheme.content = "#FAFAFA";
+
     const wrapper = document.getElementById('mobile-wrapper');
     if(!wrapper) return;
 
@@ -364,10 +373,12 @@ function createPKScreenHTML() {
             btnRePK.addEventListener('click', async () => {
                 if(confirm("確定要重新發起 PK 挑戰嗎？")) {
                     
-                    // [新增] 扣除之前贏的分數 (如果有的話)
-                    if(currentPKContext.bad && currentPKContext.bad.score) {
-                        await updateUserScore(-(currentPKContext.bad.score));
-                        console.log("Re-PK: 已扣除先前分數");
+                    // [新增] 扣除之前贏的分數 (如果有)
+                    // [修改] 改用 pointsToDeduct，確保扣除含加成在內的正確分數
+                    if(currentPKContext.pointsToDeduct > 0) {
+                        await updateUserScore(-currentPKContext.pointsToDeduct);
+                        console.log("Re-PK: 已扣除先前分數", currentPKContext.pointsToDeduct);
+                        currentPKContext.pointsToDeduct = 0; // 避免重複扣除
                     }
 
                     // [新增] 關鍵邏輯：切換身分證
@@ -937,7 +948,9 @@ async function startPK(data, collectionSource, options = {}) {
         bad: null,
         good: null,
         chatLogs: data.chatLogs || [],
-        isVictory: false 
+        isVictory: false,
+        // [新增] 紀錄該場勝利獲得的分數，以便重新PK時扣除 (若非勝利紀錄則為 0)
+        pointsToDeduct: (collectionSource === 'pk_wins' ? (data.score || 0) : 0)
     };
 
     if (collectionSource === 'pk_wins') {
@@ -2166,7 +2179,18 @@ async function handlePKResult(winner) {
         if(btnRePk) btnRePk.style.display = 'flex'; 
 
         // 1. 計算積分
-        const scoreToAdd = currentPKContext.bad?.score || 1;
+        // [修改] 計分邏輯：若低分卡打敗高分卡，獲得「鳥事等級 + 差距分」
+        const badScore = parseInt(currentPKContext.bad?.score) || 1;
+        const goodScore = parseInt(currentPKContext.good?.score) || 1;
+        let scoreToAdd = badScore;
+
+        if (goodScore < badScore) {
+            scoreToAdd = badScore + (badScore - goodScore);
+        }
+
+        // 紀錄這次獲得的分數，以便重新PK時扣除
+        currentPKContext.pointsToDeduct = scoreToAdd;
+
         const newTotal = await updateUserScore(scoreToAdd);
         const rankTitle = getRankTitle(newTotal);
 
