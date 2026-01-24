@@ -421,7 +421,6 @@ let currentWarehouseScoreFilter = 0; // [新增] 倉庫分數篩選 (0=全部)
 function createSearchHTML() {
     if (document.getElementById('search-modal')) return;
 
-    // [修改] 圖示加上 opacity:0.3; filter:grayscale(100%); 去除顏色
     const searchHTML = `
     <div id="search-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:400; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; gap: 10px; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -439,12 +438,11 @@ function createSearchHTML() {
     const wrapper = document.getElementById('mobile-wrapper');
     if(wrapper) wrapper.insertAdjacentHTML('beforeend', searchHTML);
 
-    // 關閉搜尋
     document.getElementById('btn-close-search').addEventListener('click', () => {
         history.back();
     });
 
-    // [修改] 即時搜尋邏輯 (input 事件 + 防手震)
+    // 搜尋功能
     const input = document.getElementById('input-search-keyword');
     const resultList = document.getElementById('search-results-list');
     let searchTimeout;
@@ -452,7 +450,6 @@ function createSearchHTML() {
     input.addEventListener('input', (e) => {
         const keyword = input.value.trim().toLowerCase();
         
-        // 清除上一次的等待
         clearTimeout(searchTimeout);
 
         if (!keyword) {
@@ -460,15 +457,16 @@ function createSearchHTML() {
             return;
         }
 
-        // 延遲 500ms 後才執行搜尋，避免打字太快一直讀資料庫
         searchTimeout = setTimeout(async () => {
             resultList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">搜尋中...</div>';
             
             try {
-                // 同時搜尋好壞事 (取最近 50 筆來過濾)
-                const p1 = getDocs(query(collection(db, "bad_things"), orderBy("createdAt", "desc"), limit(50)));
-                const p2 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(50)));
-                const [badSnap, goodSnap] = await Promise.all([p1, p2]);
+                // [修改] 同時搜尋好事、鳥事、PK勝利
+                const p1 = getDocs(query(collection(db, "bad_things"), orderBy("createdAt", "desc"), limit(30)));
+                const p2 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(30)));
+                const p3 = getDocs(query(collection(db, "pk_wins"), orderBy("createdAt", "desc"), limit(30)));
+                
+                const [badSnap, goodSnap, winSnap] = await Promise.all([p1, p2, p3]);
 
                 let results = [];
                 
@@ -484,30 +482,108 @@ function createSearchHTML() {
                         results.push({ id: doc.id, ...d, type: 'good' });
                     }
                 });
+                winSnap.forEach(doc => {
+                    const d = doc.data();
+                    // 勝利紀錄搜尋好壞事的標題
+                    if (d.badTitle.toLowerCase().includes(keyword) || d.goodTitle.toLowerCase().includes(keyword)) {
+                        results.push({ id: doc.id, ...d, type: 'wins' });
+                    }
+                });
 
                 if (results.length === 0) {
                     resultList.innerHTML = '<div style="text-align:center; color:#999; margin-top:50px;">找不到相關結果</div>';
                     return;
                 }
 
-                // 渲染結果
                 resultList.innerHTML = '';
                 results.forEach(item => {
-                    const color = item.type === 'bad' ? 'var(--bad-icon)' : 'var(--good-icon)';
-                    const html = `
-                        <div onclick="openEditor('${item.type}', {id:'${item.id}', title:'${item.title.replace(/'/g, "\\'")}', content:'${item.content.replace(/\r\n/g, "\\n").replace(/'/g, "\\'")}', score:${item.score}, source:'${item.source}'})" 
-                             style="background:#FFF; padding:15px; border-radius:12px; border:1px solid #F0F0F0; border-left:4px solid ${color}; cursor:pointer;">
-                            <div style="font-weight:bold; color:#333; margin-bottom:4px;">${item.title}</div>
-                            <div style="font-size:12px; color:#999; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${item.content}</div>
-                        </div>
+                    let color = '#999';
+                    let typeLabel = '';
+                    let actionBtnHTML = '';
+                    let title = item.title;
+                    let content = item.content;
+
+                    if (item.type === 'bad') {
+                        color = 'var(--bad-icon)';
+                        typeLabel = '鳥事';
+                        title = item.title;
+                        content = item.content;
+                        // [新增] 修改按鈕
+                        actionBtnHTML = `<button onclick="openEditor('bad', {id:'${item.id}', title:'${item.title.replace(/'/g, "\\'")}', content:'${item.content.replace(/\r\n/g, "\\n").replace(/'/g, "\\'")}', score:${item.score}, source:'${item.source}'})" style="margin-top:8px; border:1px solid #EEE; background:#FFF; color:#666; padding:4px 12px; border-radius:12px; cursor:pointer; font-size:12px;">修改</button>`;
+                    } else if (item.type === 'good') {
+                        color = 'var(--good-icon)';
+                        typeLabel = '好事';
+                        title = item.title;
+                        content = item.content;
+                        // [新增] 修改按鈕
+                        actionBtnHTML = `<button onclick="openEditor('good', {id:'${item.id}', title:'${item.title.replace(/'/g, "\\'")}', content:'${item.content.replace(/\r\n/g, "\\n").replace(/'/g, "\\'")}', score:${item.score}, source:'${item.source}'})" style="margin-top:8px; border:1px solid #EEE; background:#FFF; color:#666; padding:4px 12px; border-radius:12px; cursor:pointer; font-size:12px;">修改</button>`;
+                    } else if (item.type === 'wins') {
+                        color = '#E0C060';
+                        typeLabel = 'PK勝利';
+                        title = `擊敗「${item.badTitle}」`;
+                        content = `戰友：${item.goodTitle}`;
+                        // [新增] 回顧勝利按鈕 (淺黃色)
+                        // 注意：這裡使用全域函式或需要確保 startPK 可用，這裡使用 onclick 需要傳遞參數較複雜，
+                        // 我們改用 dataset 綁定事件會比較乾淨，但為了配合 innerHTML 結構，我們直接用 inline onclick 呼叫全域函式。
+                        // 為了讓 startPK 能被呼叫，我們假設 startPK 是全域的。
+                        // 但為了安全，我們將資料存在 dataset，並用統一監聽器處理 (下方實作)。
+                        // 這裡為了簡便，我們用一個特殊的 class 來識別點擊。
+                    }
+
+                    const safeTitle = (title || "").replace(/'/g, "\\'");
+                    
+                    let html = `
+                        <div class="search-item" data-id="${item.id}" data-type="${item.type}" 
+                             style="background:#FFF; padding:15px; border-radius:12px; border:1px solid #F0F0F0; border-left:4px solid ${color};">
+                            <div style="font-size:10px; color:${color}; font-weight:bold; margin-bottom:2px;">${typeLabel}</div>
+                            <div style="font-weight:bold; color:#333; margin-bottom:4px;">${title}</div>
+                            <div style="font-size:12px; color:#999; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${content}</div>
+                            <div style="display:flex; justify-content:flex-end;">
                     `;
+
+                    if (item.type === 'wins') {
+                        html += `<button class="btn-search-action" data-action="review" data-id="${item.id}" style="margin-top:8px; border:none; background:#FFF9C4; color:#FBC02D; padding:6px 14px; border-radius:12px; cursor:pointer; font-size:12px; font-weight:bold;">回顧勝利</button>`;
+                    } else {
+                        html += `<button class="btn-search-action" data-action="edit" data-id="${item.id}" data-type="${item.type}" style="margin-top:8px; border:1px solid #EEE; background:#FFF; color:#666; padding:6px 14px; border-radius:12px; cursor:pointer; font-size:12px;">修改</button>`;
+                    }
+
+                    html += `</div></div>`;
                     resultList.insertAdjacentHTML('beforeend', html);
                 });
 
             } catch(err) {
+                console.error(err);
                 resultList.innerHTML = `<div style="text-align:center; color:red;">搜尋錯誤: ${err.message}</div>`;
             }
-        }, 500); // 500毫秒延遲
+        }, 500);
+    });
+
+    // [新增] 搜尋結果按鈕的事件代理
+    resultList.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.btn-search-action');
+        if (!btn) return;
+
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        const type = btn.dataset.type;
+
+        if (action === 'edit') {
+            const collectionName = type === 'good' ? 'good_things' : 'bad_things';
+            try {
+                const docSnap = await getDoc(doc(db, collectionName, id));
+                if (docSnap.exists()) {
+                    openEditor(type, { id: docSnap.id, ...docSnap.data() });
+                }
+            } catch(e) { console.error(e); }
+        } else if (action === 'review') {
+            try {
+                const docSnap = await getDoc(doc(db, 'pk_wins', id));
+                if (docSnap.exists()) {
+                    document.getElementById('search-modal').classList.add('hidden'); // 關閉搜尋
+                    startPK({ id: docSnap.id, ...docSnap.data() }, 'pk_wins');
+                }
+            } catch(e) { console.error(e); }
+        }
     });
 }
 createSearchHTML();
@@ -1675,16 +1751,15 @@ function createWarehouseHTML() {
         const action = btn.dataset.action;
         const id = btn.dataset.id;
         const winId = btn.dataset.winId; 
+        const type = btn.dataset.type; // [關鍵] 直接獲取類型 (wins, good, bad)，不再依賴顏色
 
         if (!action || !id) return;
         
         try {
             if (action === 'delete') {
-                const isWinTab = document.getElementById('tab-wins').style.background.includes('rgb(255, 215, 0)');
-                
                 // [修改] 針對勝利紀錄顯示特定風格提示
                 let confirmMsg = '確定要刪除這張卡片嗎？';
-                if (isWinTab) {
+                if (type === 'wins') {
                     confirmMsg = '只刪除勝利紀錄與其對話紀錄，好事卡/鳥事卡仍保存在各倉庫中。';
                 }
 
@@ -1692,12 +1767,13 @@ function createWarehouseHTML() {
                 const confirmed = await showConfirmMessage(confirmMsg, "確定刪除", "取消");
                 if (!confirmed) return;
 
-                if (isWinTab) {
+                if (type === 'wins') {
                      // 1. 處理勝利紀錄
                      const winDoc = await getDoc(doc(db, 'pk_wins', id));
                      if (winDoc.exists()) {
                          const data = winDoc.data();
                          // 2. 清除對應鳥事卡的對話紀錄，並重置狀態
+                         // 注意：這裡只會清空對話紀錄，絕對不會刪除鳥事卡
                          if (data.originalBadId) {
                              const badRef = doc(db, 'bad_things', data.originalBadId);
                              await updateDoc(badRef, {
@@ -1712,8 +1788,7 @@ function createWarehouseHTML() {
                      await moveToTrash('pk_wins', id);
                 } else {
                     // 一般刪除：移動到垃圾桶
-                    const isBadTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)');
-                    const collectionName = isBadTab ? 'bad_things' : 'good_things';
+                    const collectionName = type === 'good' ? 'good_things' : 'bad_things';
                     await moveToTrash(collectionName, id);
                 }
                 
@@ -1721,12 +1796,10 @@ function createWarehouseHTML() {
                 showSystemMessage("已移至垃圾桶");
 
             } else if (action === 'edit') {
-                const isGoodTab = document.getElementById('tab-good').style.background.includes('var(--good-light)');
-                const collectionName = isGoodTab ? 'good_things' : 'bad_things';
-                
+                const collectionName = type === 'good' ? 'good_things' : 'bad_things';
                 const docSnap = await getDoc(doc(db, collectionName, id));
                 if (docSnap.exists()) {
-                    openEditor(isGoodTab ? 'good' : 'bad', { id: docSnap.id, ...docSnap.data() });
+                    openEditor(type === 'good' ? 'good' : 'bad', { id: docSnap.id, ...docSnap.data() });
                 }
             } else if (action === 'defeat') {
                 document.getElementById('warehouse-modal').classList.add('hidden');
@@ -1870,17 +1943,21 @@ async function loadWarehouseData(type) {
             
             // [修正] 按鈕樣式：圓形按鈕縮小至 28px
             const iconEdit = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
-            const iconTrash = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2 2v2"></path></svg>`;
+            
+            // [修正] 垃圾桶 Icon：使用標準單色垃圾桶 SVG (含蓋子與桶身，無中間線條)
+            // 您要求「最普通的單色垃圾桶」，這裡提供一個乾淨的版本
+            const iconTrash = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>`;
             
             const btnStyle = `width:28px; height:28px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;`;
 
+            // [重點修改] 在按鈕加入 data-type="${type}"，確保刪除時知道是哪一類，不依賴顏色
             if (type === 'good') { 
                 iconColor = 'var(--good-icon)'; 
                 labelText = `等級: ${data.score || 1}`;
                 
                 actionButtonsHTML = `
-                    <button data-action="edit" data-id="${docId}" style="${btnStyle}" title="編輯">${iconEdit}</button>
-                    <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
+                    <button data-action="edit" data-id="${docId}" data-type="good" style="${btnStyle}" title="編輯">${iconEdit}</button>
+                    <button data-action="delete" data-id="${docId}" data-type="good" style="${btnStyle}" title="刪除">${iconTrash}</button>
                 `;
             }
             else if (type === 'bad') { 
@@ -1900,13 +1977,13 @@ async function loadWarehouseData(type) {
                     winIdAttr = data.lastWinId || ""; 
                 }
 
-                // [修正] 擊敗按鈕縮小為高度 28px
+                // [修正] 擊敗按鈕縮小
                 const defeatBtnStyle = `height:28px; padding:0 12px; border-radius:14px; border:none; cursor:pointer; font-weight:bold; font-size:12px; color:#FFF; background:${btnDefeatColor};`;
 
                 actionButtonsHTML = `
-                    <button data-action="defeat" data-id="${docId}" data-win-id="${winIdAttr}" style="${defeatBtnStyle}">${btnDefeatText}</button>
-                    <button data-action="edit" data-id="${docId}" style="${btnStyle}" title="編輯">${iconEdit}</button>
-                    <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
+                    <button data-action="defeat" data-id="${docId}" data-win-id="${winIdAttr}" data-type="bad" style="${defeatBtnStyle}">${btnDefeatText}</button>
+                    <button data-action="edit" data-id="${docId}" data-type="bad" style="${btnStyle}" title="編輯">${iconEdit}</button>
+                    <button data-action="delete" data-id="${docId}" data-type="bad" style="${btnStyle}" title="刪除">${iconTrash}</button>
                 `;
             }
             else { 
@@ -1920,8 +1997,8 @@ async function loadWarehouseData(type) {
                 const reviewBtnStyle = `height:28px; padding:0 12px; border-radius:14px; border:none; cursor:pointer; font-weight:bold; font-size:12px; background:#FFF9C4; color:#FBC02D;`;
 
                 actionButtonsHTML = `
-                    <button data-action="review" data-id="${docId}" style="${reviewBtnStyle}">回顧勝利</button>
-                    <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
+                    <button data-action="review" data-id="${docId}" data-type="wins" style="${reviewBtnStyle}">回顧勝利</button>
+                    <button data-action="delete" data-id="${docId}" data-type="wins" style="${btnStyle}" title="刪除">${iconTrash}</button>
                 `;
             }
 
