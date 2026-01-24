@@ -232,7 +232,7 @@ function createPKScreenHTML() {
             
             <div style="display: flex; align-items: stretch; gap: 10px; flex-shrink: 0; position: relative;">
                 <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 0 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left; overflow:hidden;">
-                    <div style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
+                    <div id="pk-bad-header" style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
                     <div style="flex: 1; padding-bottom:15px;">
                         <h3 id="pk-bad-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4; text-align: left;">(標題)</h3>
                         <p id="pk-bad-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-align: left;">(內容...)</p>
@@ -245,7 +245,7 @@ function createPKScreenHTML() {
                 </div>
 
                 <div id="btn-pk-good" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 0 20px; background: var(--good-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left; overflow:hidden;">
-                     <div style="color: var(--good-icon); font-size: 13px; font-weight: 700;">好事</div>
+                     <div id="pk-good-header" style="color: var(--good-icon); font-size: 13px; font-weight: 700;">好事</div>
                      <div style="flex: 1; padding-bottom:15px;">
                         <h3 id="pk-good-title" style="margin: 0 0 6px 0; font-size: 16px; color: var(--text-main); line-height: 1.4; text-align: left;">(標題)</h3>
                         <p id="pk-good-content" style="margin: 0; font-size: 13px; color: var(--text-main); opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-align: left;">(內容...)</p>
@@ -989,6 +989,8 @@ async function startPK(data, collectionSource, options = {}) {
 
         document.getElementById('pk-bad-title').innerText = data.title;
         document.getElementById('pk-bad-content').innerText = data.content;
+        // [新增] 顯示鳥事等級
+        document.getElementById('pk-bad-header').innerText = `鳥事 (Lv.${data.score || 1})`;
         currentPKContext.bad = data;
 
         // 渲染歷史對話
@@ -1051,6 +1053,8 @@ async function startPK(data, collectionSource, options = {}) {
                 currentPKContext.good = selectedGoodThing;
                 document.getElementById('pk-good-title').innerText = selectedGoodThing.title;
                 document.getElementById('pk-good-content').innerText = selectedGoodThing.content;
+                // [新增] 顯示好事等級
+                document.getElementById('pk-good-header').innerText = `好事 (Lv.${selectedGoodThing.score || 1})`;
                 
                 const loadingEl = document.getElementById('ai-selecting-msg');
                 if(loadingEl) loadingEl.remove();
@@ -1268,6 +1272,12 @@ ${goodText}
         let success = false;
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+        // [新增] 輔助函式：更新載入訊息
+        const updateLoadingMsg = (msg) => {
+            const el = document.getElementById(loadingId);
+            if(el) el.innerText = msg;
+        };
+
         while (!success) {
             if (signal.aborted) throw new Error("AbortError");
 
@@ -1276,6 +1286,8 @@ ${goodText}
 
                 try {
                     console.log(`[聊天] 嘗試連線模型: ${model.id} ...`);
+                    // [新增] 介面顯示當前嘗試的模型
+                    updateLoadingMsg(`嘗試連線 AI 模型 (${model.id})...`);
                     
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
                         method: 'POST',
@@ -1308,12 +1320,15 @@ ${goodText}
                 } catch (err) {
                     if (err.name === 'AbortError' || err.message === 'AbortError') throw err;
                     console.warn(`[聊天] 模型 ${model.id} 失敗 (${err.message})`);
+                    // [新增] 介面顯示失敗與切換
+                    updateLoadingMsg(`模型 ${model.id} 忙碌中，切換下一條線路...`);
                 }
             }
 
             if (success) break; 
             
             console.warn("所有模型皆忙碌，3秒後重新開始新一輪嘗試...");
+            updateLoadingMsg("所有線路忙碌，系統將於 3 秒後重試...");
             await sleep(3000); 
         }
 
@@ -2172,6 +2187,8 @@ async function handlePKResult(winner) {
                     
                     document.getElementById('pk-good-title').innerText = newGood.title;
                     document.getElementById('pk-good-content').innerText = newGood.content;
+                    // [新增] 顯示好事等級
+                    document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
                     
                     const prompt = `【系統指令：使用者判定鳥事勝出（鳥事太強）。系統已重新選出一張新的好事卡（如上數據）。請執行模式三：針對這張新卡片，給出全新的比較觀點，嘗試再次說服使用者。】`;
                     await callGeminiChat(prompt, true);
