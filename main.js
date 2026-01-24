@@ -854,56 +854,51 @@ let currentPKContext = { bad: null, good: null };
 
 // --- PK 核心邏輯 (保存對話版) ---
 
-// [修正] AI 智慧選牌模組：階級擴展搜尋邏輯
+// [修正] AI 智慧選牌模組：移除空值檢查 + 強制階級擴展 + 創意切入
 async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey || candidateDocs.length === 0) return null;
 
-    // [核心修正] 排除清單統一轉為陣列
+    // 1. 排除清單處理
     const excludes = Array.isArray(excludeList) ? excludeList : (excludeList ? [excludeList] : []);
 
-    // 1. 先將所有原始文件過濾一次 (排除已出現的 ID)
+    // 2. 嚴格過濾：只保留 ID 不在排除清單中的牌 (絕對不重複)
     const availableDocs = candidateDocs.filter(doc => {
-        const data = doc.data();
-        const isExcludedById = excludes.includes(doc.id);
-        const isExcludedByTitle = excludes.includes(data.title);
-        return !isExcludedById && !isExcludedByTitle;
+        return !excludes.includes(doc.id);
     });
 
-    if (availableDocs.length === 0) {
-        // 真的沒牌了，只好從原名單隨機挑一張 (避免當機)
-        if (candidateDocs.length > 0) {
-             const randomDoc = candidateDocs[Math.floor(Math.random() * candidateDocs.length)];
-             return { id: randomDoc.id, ...randomDoc.data() }; 
-        }
-        return null;
-    }
+    // [核心修正] 移除「回傳 null」的檢查。
+    // 我們相信資料庫一定有牌，就算篩選完數量少，也要盡力去選。
 
-    // [核心演算法] 階級擴展搜尋 (Tiered Expansion Search)
+    // 3. 階級擴展搜尋 (滾雪球策略)
+    // 規則：先鎖定「分數 <= 鳥事分數」的卡片
+    // 如果數量不滿 10 張，就將搜尋上限 +1，直到湊滿 10 張或封頂 (Lv.5)
+    
     const badScore = parseInt(badData.score) || 1;
-    let searchMaxScore = badScore;
+    let searchMaxScore = badScore; // 起始點：包含所有「小於」與「等於」的牌
     let finalCandidates = [];
 
-    console.log(`[選牌] 鳥事等級 Lv.${badScore}，開始階級搜尋...`);
+    console.log(`[選牌] 鳥事等級 Lv.${badScore}，開始階級搜尋 (目標: 湊滿10張)...`);
 
     while (searchMaxScore <= 5) {
-        // 篩選：等級 <= 目前搜尋上限 的卡片
+        // 篩選：等級 <= 目前搜尋上限 的卡片 (這樣就包含了更低階的牌)
         const pool = availableDocs.filter(doc => {
             const s = parseInt(doc.data().score) || 1;
             return s <= searchMaxScore;
         });
 
-        if (pool.length > 0) {
+        // [關鍵修正] 如果找到的牌 >= 10 張，或者已經擴大到最高等級 (Lv.5)，就停止擴大
+        if (pool.length >= 10 || searchMaxScore === 5) {
             finalCandidates = pool;
-            console.log(`[選牌] 在等級 Lv.1 ~ Lv.${searchMaxScore} 區間找到 ${pool.length} 張不重複的好事卡`);
-            break; // 找到了！跳出迴圈
+            console.log(`[選牌] 鎖定範圍 Lv.1 ~ Lv.${searchMaxScore}，共 ${pool.length} 張候選牌`);
+            break;
         } else {
-            console.log(`[選牌] 等級 Lv.1 ~ Lv.${searchMaxScore} 無牌，擴大搜尋範圍...`);
-            searchMaxScore++; // 擴大一階
+            console.log(`[選牌] 範圍 Lv.1 ~ Lv.${searchMaxScore} 只有 ${pool.length} 張，不夠 10 張，擴大搜尋至 Lv.${searchMaxScore + 1}...`);
+            searchMaxScore++;
         }
     }
 
-    // 如果擴大到 Lv.5 還是沒牌，則直接使用所有可用牌
+    // 雙重保險：如果經過篩選還是空的 (雖然使用者說不可能)，為了程式不報錯，使用所有可用牌
     if (finalCandidates.length === 0) {
         finalCandidates = availableDocs;
     }
@@ -916,7 +911,7 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
         content: (doc.data().content || "").substring(0, 50) + "..."
     }));
 
-    // [保留] 您的最高指導原則 Prompt
+    // [Prompt] 植入創意指令：沒有退路，必須找出連結
     const selectionPrompt = `
     任務：你是「GoodWins」APP 的後台決策大腦。請從下列【候選好事卡清單】中，挑選唯一一張最能破解【眼前鳥事】的卡片。
 
@@ -928,19 +923,12 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     【候選好事卡清單】
     ${JSON.stringify(aiInputCandidates)}
 
-    【選牌邏輯】
-    1. 屬性對比：選擇性質相反的事件（例：被罵 vs 被稱讚）。
-    2. 側面破解：選擇能證明「世界其實沒那麼糟」的證據。
-    3. 價值翻轉：選擇長期價值遠高於眼前損失的事件。
-
     【選牌最高指導原則】
-    1. **避免重複**：清單中已預先排除了最近 10 次用過的卡片，請從剩下的選項中挑選。
-    2. **以柔克剛 (David vs. Goliath)**：
-       - 若有「好事等級 <= 鳥事等級」的卡片，且內容足以達成說服效果，請優先選擇。
-       - 理由：如果能用一件「微小的好事（日常平淡的快樂）」就抵銷掉「巨大的鳥事」，代表好事的本質力量更強大。
-    3. **避免殺雞用牛刀**：
-       - 除非沒有適合的低分卡，否則**盡量不要**選等級遠高於鳥事的卡片（例如不要用 5 分神聖好事去打 1 分微鳥事）。我們想證明的是「日常普遍的美好就足以對抗災難」。
-    4. **內容關聯**：在滿足上述分數邏輯的前提下，選擇性質相反或能側面證明「人性本善/運氣不差」的事件。
+    1. **絕對不重複**：清單中已經移除了已出現過的卡片。
+    2. **創意切入 (Creative Angle) - 這是最重要的**：
+       - 如果你覺得清單中的牌與鳥事「不相關」或「等級太低」，請**發揮你的創意與聯想力**。
+       - **絕對不要放棄選擇**。這就是使用者手上僅有的牌，你的任務是找出一個意想不到的角度（例如：幽默、反諷、微小的安慰、轉念），讓這張看似無關的牌也能成為一種力量。
+       - 告訴自己：**沒有無用的好事，只有沒被發現的連結。** 請務必選出一張。
 
     【輸出規定】
     請「只回傳」該卡片的 ID (純字串)，不要有任何解釋、標點符號、Markdown 或額外文字。
