@@ -369,7 +369,9 @@ function createPKScreenHTML() {
                         currentPKContext.collection = 'bad_things';
                         currentPKContext.docId = currentPKContext.originalBadId;
                     }
-
+                    
+                    // [新增] 設定為再擊敗狀態 (影響退出邏輯)
+                    currentPKContext.wasDefeated = true; 
                     currentPKContext.isVictory = false; // 重置勝利狀態
                     btnRePK.style.display = 'none'; 
                     
@@ -382,9 +384,11 @@ function createPKScreenHTML() {
                              addChatMessage('system', "────── 重新開始戰局 ──────", true);
                              addChatMessage('system', "正在重新調度好事資源...", false);
                              
-                             // 2. 重新抽卡
+                             // 2. 重新抽卡 (排除目前這張)
                              const docs = querySnapshot.docs;
-                             const newGood = await aiPickBestCard(currentPKContext.bad, docs);
+                             const excludeTitle = currentPKContext.good?.title; // 紀錄目前的好事標題
+                             
+                             const newGood = await aiPickBestCard(currentPKContext.bad, docs, excludeTitle);
                              
                              if (newGood) {
                                  currentPKContext.good = newGood;
@@ -602,13 +606,12 @@ const btnExitPK = document.getElementById('btn-exit-pk');
 if(btnExitPK) {
     btnExitPK.addEventListener('click', async () => {
         
-        // 封裝離開動作：使用 history.back() 回到上一頁 (會自動關閉畫面)
         const performExit = async () => {
             if (currentAbortController) {
                 currentAbortController.abort();
                 currentAbortController = null;
             }
-            history.back(); // 觸發 popstate，由導航系統處理關閉
+            history.back(); 
         };
 
         // 1. 如果已經勝利：直接離開
@@ -617,58 +620,48 @@ if(btnExitPK) {
             return;
         }
 
-        // 2. [待PK鳥事庫] 情境
-        if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
-            let promptMsg = "PK尚未完成，確定離開？";
-            if (currentPKContext.wasDefeated) promptMsg = "再度PK尚未完成，確定離開？";
+        // 2. 失敗/中途離開邏輯 (涵蓋 Re-PK 失敗)
+        let promptMsg = "PK尚未完成，確定離開？";
+        
+        // 如果是「再擊敗」狀態下離開，視為失敗，需要重置
+        if (currentPKContext.wasDefeated) {
+            promptMsg = "再度PK尚未完成，離開將視為挑戰失敗（鳥事回歸），確定離開？";
+        }
 
-            const confirmExit = await showConfirmMessage(promptMsg);
-            if (!confirmExit) return; 
+        const confirmExit = await showConfirmMessage(promptMsg, "確定離開", "取消");
+        if (!confirmExit) return; 
 
-            try {
+        try {
+            // 如果是 Re-PK 失敗，必須刪除勝利紀錄並重置鳥事卡
+            if (currentPKContext.wasDefeated && currentPKContext.docId) {
+                
+                // 重置鳥事卡 (變回紅色)
                 const docRef = doc(db, 'bad_things', currentPKContext.docId);
-                const updateData = {
+                await updateDoc(docRef, {
+                    isDefeated: false,
+                    lastWinId: null,
+                    updatedAt: serverTimestamp(),
+                    chatLogs: currentPKContext.chatLogs // 保留對話
+                });
+
+                // 如果有對應的勝利紀錄 (lastWinId 或 winId)，刪除它
+                if (currentPKContext.winId) {
+                    await deleteDoc(doc(db, 'pk_wins', currentPKContext.winId));
+                }
+                
+                showSystemMessage("挑戰未完成，鳥事已回歸待擊敗狀態。");
+            } 
+            else if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
+                // 一般 PK 中途離開，只更新對話與時間
+                const docRef = doc(db, 'bad_things', currentPKContext.docId);
+                await updateDoc(docRef, {
                     updatedAt: serverTimestamp(),
                     chatLogs: currentPKContext.chatLogs
-                };
-                if (currentPKContext.wasDefeated) {
-                    updateData.isDefeated = false;
-                    updateData.lastWinId = null;
-                }
-                await updateDoc(docRef, updateData);
-            } catch (e) { console.error(e); }
+                });
+            }
+        } catch (e) { console.error(e); }
 
-            await performExit();
-            return;
-        }
-
-        // 3. [PK勝利庫] 情境
-        if (currentPKContext.collection === 'pk_wins' && currentPKContext.winId) {
-            const promptMsg = "再度PK尚未完成，要保持勝利紀錄，還是讓鳥事卡重新回到待擊敗狀態？";
-            const confirmReset = await showConfirmMessage(promptMsg);
-            
-            if (!confirmReset) return; 
-
-            try {
-                if (currentPKContext.originalBadId) {
-                    const badRef = doc(db, 'bad_things', currentPKContext.originalBadId);
-                    await updateDoc(badRef, {
-                        isDefeated: false,
-                        lastWinId: null,
-                        updatedAt: serverTimestamp(),
-                        chatLogs: currentPKContext.chatLogs 
-                    });
-                }
-                await deleteDoc(doc(db, 'pk_wins', currentPKContext.winId));
-            } catch(e) { console.error(e); }
-
-            // 這裡特殊：因為勝利卡已經被刪除，回到上一頁(勝利庫)會看不到東西
-            // 所以我們先 back() 回去，系統會自動重新載入倉庫列表，這樣就正確了
-            await performExit();
-            return;
-        }
-
-        performExit();
+        await performExit();
     });
 }
 
@@ -832,20 +825,33 @@ let currentPKContext = { bad: null, good: null };
 
 // --- PK 核心邏輯 (保存對話版) ---
 
-// [修正] AI 智慧選牌模組：已補回原本的選牌邏輯 Prompt，並加入降級迴圈
-async function aiPickBestCard(badData, candidateDocs) {
+// [修正] AI 智慧選牌模組：支援排除卡片
+async function aiPickBestCard(badData, candidateDocs, excludeTitle = null) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey || candidateDocs.length === 0) return null;
 
     console.log("AI 正在評估", candidateDocs.length, "張好事卡...");
 
-    const candidates = candidateDocs.map(doc => ({
+    // [新增] 過濾掉要排除的卡片 (例如上一場的卡片)
+    const filteredDocs = excludeTitle 
+        ? candidateDocs.filter(doc => doc.data().title !== excludeTitle)
+        : candidateDocs;
+
+    if (filteredDocs.length === 0) {
+        // 如果濾完沒牌了，只好隨機挑一張不同的，或回傳 null
+        if (candidateDocs.length > 0) {
+             const randomDoc = candidateDocs[Math.floor(Math.random() * candidateDocs.length)];
+             return randomDoc.data();
+        }
+        return null;
+    }
+
+    const candidates = filteredDocs.map(doc => ({
         id: doc.id,
         title: doc.data().title,
         content: (doc.data().content || "").substring(0, 50) + "..."
     }));
 
-    // [修正] 這裡恢復成原本完整的 Prompt，包含選牌邏輯
     const selectionPrompt = `
     任務：你是「GoodWins」APP 的後台決策大腦。請從下列【候選好事卡清單】中，挑選唯一一張最能破解【眼前鳥事】的卡片。
     
@@ -865,7 +871,6 @@ async function aiPickBestCard(badData, candidateDocs) {
     請「只回傳」該卡片的 ID (純字串)，不要有任何解釋、標點符號、Markdown 或額外文字。
     `;
 
-    // [新增] 參考 api.js 的降級迴圈邏輯
     const modelList = await getSortedModelList(apiKey);
     
     for (const model of modelList) {
@@ -882,28 +887,26 @@ async function aiPickBestCard(badData, candidateDocs) {
 
             const data = await response.json();
             
-            // 檢查是否遇到 429/503 或其他錯誤 (fallback 關鍵)
             if (data.error) throw new Error(data.error.message);
 
             const selectedId = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
             if (selectedId) {
-                // 成功選出，結束迴圈
-                const bestDoc = candidateDocs.find(doc => doc.id === selectedId);
+                // 從過濾後的清單中找
+                const bestDoc = filteredDocs.find(doc => doc.id === selectedId);
                 return bestDoc ? bestDoc.data() : null;
             }
         } catch (e) {
             console.warn(`[選牌] 模型 ${model.id} 失敗，嘗試下一個...`, e.message);
-            // 失敗了，繼續迴圈跑下一個模型
         }
     }
 
     console.warn("AI 選牌全數失敗");
     showSystemMessage("目前找不到適合的AI模型，請稍後再試一次。");
-    return "AI_FAILED"; // 回傳特殊字串，告知上層停止
+    return "AI_FAILED"; 
 }
 
-async function startPK(data, collectionSource) {
-    history.pushState({ tier: 'pk' }, '', ''); // [新增] 導航紀錄
+async function startPK(data, collectionSource, options = {}) {
+    history.pushState({ tier: 'pk' }, '', ''); 
     screens.pk.classList.remove('hidden');
     const chatHistory = document.getElementById('chat-history');
     chatHistory.innerHTML = ''; 
@@ -916,18 +919,18 @@ async function startPK(data, collectionSource) {
         collection: collectionSource,
         winId: collectionSource === 'pk_wins' ? data.id : null,
         originalBadId: data.originalBadId || null,
-        // [新增] 記錄初始狀態是否為已擊敗 (用於離開時判斷是劇本 A 還是 B)
-        wasDefeated: data.isDefeated || false, 
+        
+        // [修正] 如果是「再擊敗」模式，wasDefeated 強制為 true
+        wasDefeated: options.isReDefeat || data.isDefeated || false, 
+        
         bad: null,
         good: null,
-        // [修正] 對話紀錄絕對保留！無論是否為 Fresh PK，只要有紀錄就載入
         chatLogs: data.chatLogs || [],
         isVictory: false 
     };
 
     if (collectionSource === 'pk_wins') {
         // --- 勝利回顧模式 ---
-        // 回顧模式視為已經勝利，顯示重來按鈕
         currentPKContext.isVictory = true; 
         if(btnRePk) btnRePk.style.display = 'flex';
         
@@ -953,19 +956,25 @@ async function startPK(data, collectionSource) {
         document.getElementById('pk-bad-content').innerText = data.content;
         currentPKContext.bad = data;
 
-        // 渲染歷史對話 (如果有的話)
+        // 渲染歷史對話
         if (currentPKContext.chatLogs.length > 0) {
             currentPKContext.chatLogs.forEach(log => addChatMessage(log.role, log.text, false, log.modelName));
         }
 
         // [核心修正] AI 啟動邏輯：
-        // 1. 如果沒有對話紀錄，代表是全新的 PK -> 觸發選牌
-        // 2. 如果是「待PK鳥事」(collectionSource === 'bad_things') 且沒有好事卡資料 (因為 good 卡不存於 bad doc)，
-        //    即使有歷史對話，AI 也需要重新選牌來進行上下文對照 (否則無法辯論)。
-        //    所以這裡我們判斷：如果是 bad_things 且 currentPKContext.good 為空，就執行選牌。
-        if (currentPKContext.chatLogs.length === 0 || (collectionSource === 'bad_things' && !currentPKContext.good)) {
-            document.getElementById('pk-good-title').innerText = "AI 思考中...";
-            document.getElementById('pk-good-content').innerText = "正在從資料庫挑選最佳策略...";
+        // 1. 全新開局 (no logs)
+        // 2. 待PK鳥事 (bad_things) 且尚未選好 Good Card
+        // 3. [新增] 再擊敗 (options.isReDefeat) -> 強制選新牌
+        if (currentPKContext.chatLogs.length === 0 || (collectionSource === 'bad_things' && !currentPKContext.good) || options.isReDefeat) {
+            
+            // 如果是再擊敗，先清除舊的好事資訊
+            if(options.isReDefeat) {
+                document.getElementById('pk-good-title').innerText = "AI 挑選中...";
+                document.getElementById('pk-good-content').innerText = "正在尋找新策略...";
+            } else {
+                document.getElementById('pk-good-title').innerText = "AI 思考中...";
+                document.getElementById('pk-good-content').innerText = "正在從資料庫挑選最佳策略...";
+            }
             
             try {
                 const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(20));
@@ -981,19 +990,17 @@ async function startPK(data, collectionSource) {
                     loadingMsg.style.cssText = "text-align:center; font-size:12px; color:#999; margin:10px 0;";
                     chatHistory.appendChild(loadingMsg);
 
-                    selectedGoodThing = await aiPickBestCard(data, docs);
+                    // [修改] 傳入排除的標題 (如果是再擊敗)
+                    selectedGoodThing = await aiPickBestCard(data, docs, options.excludeGoodTitle);
 
-                    // [修正] 如果 AI 失敗，直接停止，不進行隨機挑選
                     if (selectedGoodThing === "AI_FAILED") {
                         const loadingEl = document.getElementById('ai-selecting-msg');
                         if(loadingEl) loadingEl.remove();
-                        // 保持畫面停留在 PK 初始狀態，或是關閉 PK 視窗皆可，這裡選擇保持但停止動作
                         document.getElementById('pk-good-title').innerText = "連線失敗";
                         document.getElementById('pk-good-content').innerText = "請檢查網路或稍後再試";
                         return; 
                     }
 
-                    // 防呆：如果不是失敗但回傳 null (極少見)，也不要隨機
                     if (!selectedGoodThing) {
                         showSystemMessage("目前找不到適合的AI模型，請稍後再試一次。");
                         const loadingEl = document.getElementById('ai-selecting-msg');
@@ -1008,9 +1015,13 @@ async function startPK(data, collectionSource) {
                     const loadingEl = document.getElementById('ai-selecting-msg');
                     if(loadingEl) loadingEl.remove();
 
-                    // 只有在真的是全新開局時，才發送開場白；如果是接續歷史對話，則不需發送
+                    // 發送開場白
                     if (currentPKContext.chatLogs.length === 0) {
                         await callGeminiChat("【系統指令：PK 開始。請執行模式一：策略選牌已完成，請進行價值辯論。】", true);
+                    } else if (options.isReDefeat) {
+                        // 如果是再擊敗，發送分隔線與新指令
+                        addChatMessage('system', "────── 再度挑戰 ──────", true);
+                        await callGeminiChat("【系統指令：使用者選擇「再擊敗」。請針對這張「新選出的好事卡」重新進行價值辯論。】", true);
                     }
                     
                 } else {
@@ -1805,9 +1816,20 @@ function createWarehouseHTML() {
                 document.getElementById('warehouse-modal').classList.add('hidden');
                 
                 if (winId) {
+                    // [修改] 再擊敗邏輯：讀取舊勝利以排除舊好事，並開啟新局
                     const winSnap = await getDoc(doc(db, 'pk_wins', winId));
+                    let excludeTitle = null;
                     if (winSnap.exists()) {
-                        startPK({ id: winSnap.id, ...winSnap.data() }, 'pk_wins');
+                        excludeTitle = winSnap.data().goodTitle;
+                    }
+
+                    const docSnap = await getDoc(doc(db, 'bad_things', id));
+                    if (docSnap.exists()) {
+                        // 傳入 isReDefeat: true 與排除標題
+                        startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things', { 
+                            isReDefeat: true, 
+                            excludeGoodTitle: excludeTitle 
+                        });
                         return;
                     }
                 }
@@ -2067,7 +2089,6 @@ async function handlePKResult(winner) {
                     document.getElementById('pk-good-title').innerText = newGood.title;
                     document.getElementById('pk-good-content').innerText = newGood.content;
                     
-                    // [修改] 提示指令優化
                     const prompt = `【系統指令：使用者判定鳥事勝出（鳥事太強）。系統已重新選出一張新的好事卡（如上數據）。請執行模式三：針對這張新卡片，給出全新的比較觀點，嘗試再次說服使用者。】`;
                     await callGeminiChat(prompt, true);
                 } else {
@@ -2082,10 +2103,9 @@ async function handlePKResult(winner) {
         // --- 使用者選了好事 (勝利！) ---
         addChatMessage('user', "好事贏了！這點鳥事不算什麼！ ✨");
         
-        // [新增] 設定勝利狀態，鎖定卡片點擊
         currentPKContext.isVictory = true;
         const btnRePk = document.getElementById('btn-re-pk');
-        if(btnRePk) btnRePk.style.display = 'flex'; // 顯示重來圖示
+        if(btnRePk) btnRePk.style.display = 'flex'; 
 
         // 1. 計算積分
         const scoreToAdd = currentPKContext.bad?.score || 1;
@@ -2094,18 +2114,15 @@ async function handlePKResult(winner) {
 
         // 2. 寫入勝利紀錄
         try {
-            // [修改] 檢查是否已經有勝利紀錄 ID (避免重複產生標題)
             if (currentPKContext.winId) {
                  const winRef = doc(db, "pk_wins", currentPKContext.winId);
                  await updateDoc(winRef, {
                     goodTitle: currentPKContext.good?.title || "未知好事",
                     goodContent: currentPKContext.good?.content || "", 
-                    chatLogs: currentPKContext.chatLogs, // 更新對話紀錄
+                    chatLogs: currentPKContext.chatLogs, 
                     updatedAt: serverTimestamp()
                  });
-                 console.log("勝利紀錄已更新！");
             } else {
-                // 第一次勝利，建立新紀錄
                 const winData = {
                     uid: currentUser.uid,
                     badTitle: currentPKContext.bad?.title || "未知鳥事",
@@ -2119,9 +2136,8 @@ async function handlePKResult(winner) {
                 };
                 
                 const winRef = await addDoc(collection(db, "pk_wins"), winData);
-                currentPKContext.winId = winRef.id; // 記住 ID，下次更新用
+                currentPKContext.winId = winRef.id; 
 
-                // 更新原始鳥事狀態
                 if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
                     await updateDoc(doc(db, "bad_things", currentPKContext.docId), {
                         isDefeated: true,
@@ -2129,7 +2145,6 @@ async function handlePKResult(winner) {
                         updatedAt: serverTimestamp()
                     });
                 }
-                console.log("新勝利已記錄！");
             }
 
         } catch(e) {
@@ -2137,11 +2152,9 @@ async function handlePKResult(winner) {
             showSystemMessage("勝利紀錄儲存失敗：" + e.message);
         }
 
-        // 3. 顯示勝利訊息 & 觸發 AI 恭喜
+        // 3. 顯示勝利訊息 (不呼叫 AI)
         showSystemMessage(`🎉 PK 勝利！\n\n已存入勝利庫\n獲得積分：+${scoreToAdd}\n目前總分：${newTotal}\n當前稱號：${rankTitle}`);
-        
-        // [修改] 要求簡單的恭喜
-        await callGeminiChat(`我贏了！我選擇了好事，成功擊敗了鳥事！請給我一句簡單的恭喜。`);
+        addChatMessage('system', "恭喜！您已成功擊敗鳥事，這場對話已歸檔至勝利庫。", false);
     }
 }
 
