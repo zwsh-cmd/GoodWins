@@ -23,6 +23,7 @@ const provider = new GoogleAuthProvider();
 function createEditorHTML() {
     if (document.getElementById('editor-modal')) return;
 
+    // [修改] 下拉選單文字加大至 17px
     const selectStyle = `
         width:100%; 
         padding:12px 40px 12px 12px; 
@@ -30,16 +31,14 @@ function createEditorHTML() {
         border-radius:12px; 
         background:#FAFAFA url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235A5A5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 16px center; 
         background-size: 16px;
-        font-size:16px; 
+        font-size:17px; 
         color:var(--text-main); 
         outline:none; 
         -webkit-appearance: none; 
         appearance: none;
     `;
 
-    // [修改] 1. 增加 btn-start-pk 按鈕 (預設 display:none) 
-    // [修改] 2. 調整按鈕區域佈局
-    // [修改] 3. 加大標籤與選項文字大小
+    // [修改] 1. 移除 PK 按鈕的火焰 icon
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
@@ -48,7 +47,7 @@ function createEditorHTML() {
                 <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
                 <div style="display:flex; gap:10px;">
                     <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
-                    <button id="btn-start-pk" style="display:none; background:var(--primary); border:none; color:#FFF; padding:6px 12px; border-radius:16px; font-weight:700; font-size:14px; cursor:pointer;">PK 🔥</button>
+                    <button id="btn-start-pk" style="display:none; background:var(--primary); border:none; color:#FFF; padding:6px 16px; border-radius:16px; font-weight:700; font-size:14px; cursor:pointer;">PK</button>
                 </div>
             </div>
 
@@ -197,7 +196,7 @@ function createPKScreenHTML() {
     // [修改] 1. 卡片 padding-bottom 改為 0，讓底部深色區域貼底
     // [修改] 2. expand-arrow 改為深色背景區塊，防誤觸
     // [修改] 3. btn-re-pk 改為灰色半透明，使用簡單圖示
-    // [修改] 4. chat-input 字體改為 16px
+    // [修改] 4. chat-input 字體改為 14px (與對話紀錄一致)
     const pkHTML = `
     <div id="pk-screen" class="hidden" style="flex: 1; display: flex; flex-direction: column; height: 100%; background: var(--bg-app); position: absolute; top: 0; left: 0; width: 100%; z-index: 100;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
@@ -237,7 +236,7 @@ function createPKScreenHTML() {
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02);">
                 <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF;">
-                    <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 16px;">
+                    <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 14px;">
                     <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
@@ -1705,6 +1704,7 @@ function createWarehouseHTML() {
     if (document.getElementById('warehouse-modal')) return;
 
     // [修改] 增加 filter-row 分數篩選列
+    // [修改] 增加星星與閃電 icon
     const warehouseHTML = `
     <div id="warehouse-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:200; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
@@ -1713,8 +1713,8 @@ function createWarehouseHTML() {
         </header>
         <div style="padding: 10px 20px 0 20px; display: flex; gap: 8px; overflow-x: auto;">
             <button id="tab-wins" style="flex: 1; min-width:80px; padding: 10px 5px; border: 1px solid #FBC02D; border-radius: 10px; background: #FFF9C4; color: #FBC02D; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
-            <button id="tab-good" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">好事庫</button>
-            <button id="tab-bad" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">待PK鳥事</button>
+            <button id="tab-good" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">★ 好事庫</button>
+            <button id="tab-bad" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">⚡ 待PK鳥事</button>
         </div>
         
         <div id="filter-row" style="padding: 10px 20px; display: flex; gap: 8px; overflow-x: auto; align-items:center;">
@@ -1917,11 +1917,13 @@ async function loadWarehouseData(type) {
         collectionName = 'pk_wins';
         emptyMsg = '還沒有勝利紀錄喔！<br>快去 PK 幾場吧！';
     } else if (type === 'good') {
-        if(tabGood) { tabGood.style.background = 'var(--good-light)'; tabGood.style.color = 'var(--good-icon)'; }
+        // [修改] 鼠尾草綠邊框 #7E9F7E
+        if(tabGood) { tabGood.style.background = 'var(--good-light)'; tabGood.style.color = 'var(--good-icon)'; tabGood.style.border = '1px solid #7E9F7E'; }
         collectionName = 'good_things';
         emptyMsg = '好事庫空空的。<br>記得多記錄生活中的微光！';
     } else {
-        if(tabBad) { tabBad.style.background = 'var(--bad-light)'; tabBad.style.color = 'var(--bad-icon)'; }
+        // [修改] 乾燥玫瑰粉邊框 #C47C7C
+        if(tabBad) { tabBad.style.background = 'var(--bad-light)'; tabBad.style.color = 'var(--bad-icon)'; tabBad.style.border = '1px solid #C47C7C'; }
         collectionName = 'bad_things';
         emptyMsg = '太棒了！<br>目前沒有待處理的鳥事。';
     }
