@@ -51,6 +51,9 @@ function createEditorHTML() {
                 </div>
             </div>
 
+            <style>
+                #input-title::placeholder, #input-content::placeholder { color: #CCC; opacity: 1; }
+            </style>
             <input id="input-title" type="text" placeholder="輸入標題..." autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:#666; margin-bottom:10px;">
             
             <textarea id="input-content" placeholder="輸入內容..." name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
@@ -244,37 +247,42 @@ function createPKScreenHTML() {
             });
         }
 
-        // --- [修改] 重新 PK 按鈕綁定 ---
+        // --- 重新 PK 按鈕綁定 ---
         const btnRePK = document.getElementById('btn-re-pk');
         if(btnRePK) {
             btnRePK.addEventListener('click', async () => {
-                if(confirm("您已PK勝利，確定要再次PK嗎？")) {
-                    currentPKContext.isVictory = false;
+                if(confirm("確定要重新發起 PK 挑戰嗎？")) {
+                    currentPKContext.isVictory = false; // 重置勝利狀態
                     btnRePK.style.display = 'none'; 
+                    
                     try {
                         const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(20));
                         const querySnapshot = await getDocs(q);
+                        
                         if (!querySnapshot.empty) {
+                             // 1. 顯示分隔線
+                             addChatMessage('system', "────── 重新開始戰局 ──────", true);
+                             addChatMessage('system', "正在重新調度好事資源...", false);
+                             
+                             // 2. 重新抽卡
                              const docs = querySnapshot.docs;
-                             
-                             // [新增] 加上分隔線，不刪除舊對話
-                             addChatMessage('system', "--- 重新 PK ---", true);
-                             addChatMessage('system', "價值鑑定師正在為你尋找新的觀點...", true);
-                             
                              const newGood = await aiPickBestCard(currentPKContext.bad, docs);
+                             
                              if (newGood) {
                                  currentPKContext.good = newGood;
                                  document.getElementById('pk-good-title').innerText = newGood.title;
                                  document.getElementById('pk-good-content').innerText = newGood.content;
-                                 const prompt = `【系統指令：使用者選擇重新PK。已選出新好事卡（${newGood.title}）。請保留對話記憶，並針對這張新卡片進行新一輪的價值辯論。】`;
+                                 
+                                 // 3. AI 進行新一輪說明
+                                 const prompt = `【系統指令：使用者選擇重來一次。目前已選出新好事卡（標題：${newGood.title}）。請保留之前的對話脈絡，但針對這張新卡片重新執行模式一：進行價值辯論。】`;
                                  await callGeminiChat(prompt, true); 
                              } else {
-                                 addChatMessage('system', "找不到適合的好事卡了。");
+                                 addChatMessage('ai', "我找不更好的好事了，但我依然守護在你身後。");
                              }
                         }
                     } catch(e) {
-                        console.error(e);
-                        showSystemMessage("重來失敗：" + e.message);
+                        console.error("Re-PK Error:", e);
+                        showSystemMessage("重啟失敗：" + e.message);
                     }
                 }
             });
@@ -303,31 +311,28 @@ const screens = {
 const btnExitPK = document.getElementById('btn-exit-pk');
 if(btnExitPK) {
     btnExitPK.addEventListener('click', async () => {
-        // [新增] 離開時立即中斷 AI
+        // 1. 立即中斷 AI 請求 (如果正在進行中)
         if (currentAbortController) {
             currentAbortController.abort();
             currentAbortController = null;
-            console.log("已中斷 PK 連線");
         }
 
-        // [核心修改] 如果是鳥事且未勝利，將其重置為「待PK」的一般狀態 (isDefeated: false)
-        // 這樣「再擊敗」失敗或「重新PK」中途離開，都會回到一般列表
-        if (currentPKContext.collection === 'bad_things' && !currentPKContext.isVictory && currentPKContext.docId) {
+        // 2. 離開即視為 PK 失敗 (除非已經判定勝利)
+        if (currentPKContext.collection === 'bad_things' && currentPKContext.docId && !currentPKContext.isVictory) {
             try {
                 const docRef = doc(db, 'bad_things', currentPKContext.docId);
                 await updateDoc(docRef, {
-                    isDefeated: false,
+                    isDefeated: false, // 標記為待 PK
                     updatedAt: serverTimestamp()
                 });
-                console.log("鳥事已重置為待PK狀態");
             } catch (e) {
-                console.error("Reset bad thing status failed:", e);
+                console.error("Exit PK update failed:", e);
             }
         }
 
         screens.pk.classList.add('hidden');
         
-        // 如果倉庫開啟中，重整列表以顯示最新狀態
+        // 3. 重新整理倉庫列表
         if (!screens.warehouse.classList.contains('hidden')) {
             const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
                                document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
