@@ -297,6 +297,92 @@ let currentUser = null;
 let currentMode = '';
 let editingId = null; // [新增] 用來記錄正在編輯的文件 ID
 let currentAbortController = null; // [新增] 用於中斷 AI 請求
+let currentWarehouseScoreFilter = 0; // [新增] 倉庫分數篩選 (0=全部)
+
+// --- 新增：搜尋功能視窗 ---
+function createSearchHTML() {
+    if (document.getElementById('search-modal')) return;
+
+    const searchHTML = `
+    <div id="search-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:400; display: flex; flex-direction: column;">
+        <header style="padding: 15px 20px; display: flex; gap: 10px; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
+            <div style="position:relative; flex:1;">
+                <input id="input-search-keyword" type="text" placeholder="搜尋標題或內容..." style="width:100%; padding:10px 10px 10px 36px; border:1px solid #EEE; border-radius:20px; background:#F5F5F5; font-size:14px; outline:none;">
+                <div style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#999;">🔍</div>
+            </div>
+            <button id="btn-close-search" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#666;">關閉</button>
+        </header>
+        <div id="search-results-list" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="text-align:center; color:#CCC; margin-top:50px; font-size:13px;">輸入關鍵字開始搜尋...</div>
+        </div>
+    </div>
+    `;
+    const wrapper = document.getElementById('mobile-wrapper');
+    if(wrapper) wrapper.insertAdjacentHTML('beforeend', searchHTML);
+
+    // 關閉搜尋
+    document.getElementById('btn-close-search').addEventListener('click', () => {
+        document.getElementById('search-modal').classList.add('hidden');
+    });
+
+    // 搜尋邏輯 (按 Enter 觸發)
+    const input = document.getElementById('input-search-keyword');
+    const resultList = document.getElementById('search-results-list');
+
+    input.addEventListener('keypress', async (e) => {
+        if (e.key === 'Enter') {
+            const keyword = input.value.trim().toLowerCase();
+            if (!keyword) return;
+
+            resultList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">搜尋中...</div>';
+            
+            try {
+                // 同時搜尋好壞事 (取最近 50 筆來過濾)
+                const p1 = getDocs(query(collection(db, "bad_things"), orderBy("createdAt", "desc"), limit(50)));
+                const p2 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(50)));
+                const [badSnap, goodSnap] = await Promise.all([p1, p2]);
+
+                let results = [];
+                
+                badSnap.forEach(doc => {
+                    const d = doc.data();
+                    if (d.title.toLowerCase().includes(keyword) || d.content.toLowerCase().includes(keyword)) {
+                        results.push({ id: doc.id, ...d, type: 'bad' });
+                    }
+                });
+                goodSnap.forEach(doc => {
+                    const d = doc.data();
+                    if (d.title.toLowerCase().includes(keyword) || d.content.toLowerCase().includes(keyword)) {
+                        results.push({ id: doc.id, ...d, type: 'good' });
+                    }
+                });
+
+                if (results.length === 0) {
+                    resultList.innerHTML = '<div style="text-align:center; color:#999; margin-top:50px;">找不到相關結果</div>';
+                    return;
+                }
+
+                // 渲染結果
+                resultList.innerHTML = '';
+                results.forEach(item => {
+                    const color = item.type === 'bad' ? 'var(--bad-icon)' : 'var(--good-icon)';
+                    const html = `
+                        <div onclick="openEditor('${item.type}', {id:'${item.id}', title:'${item.title.replace(/'/g, "\\'")}', content:'${item.content.replace(/\r\n/g, "\\n").replace(/'/g, "\\'")}', score:${item.score}, source:'${item.source}'})" 
+                             style="background:#FFF; padding:15px; border-radius:12px; border:1px solid #F0F0F0; border-left:4px solid ${color}; cursor:pointer;">
+                            <div style="font-weight:bold; color:#333; margin-bottom:4px;">${item.title}</div>
+                            <div style="font-size:12px; color:#999; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${item.content}</div>
+                        </div>
+                    `;
+                    resultList.insertAdjacentHTML('beforeend', html);
+                });
+
+            } catch(err) {
+                resultList.innerHTML = `<div style="text-align:center; color:red;">搜尋錯誤: ${err.message}</div>`;
+            }
+        }
+    });
+}
+createSearchHTML();
 
 const screens = {
     login: document.getElementById('login-screen'),
@@ -311,28 +397,32 @@ const screens = {
 const btnExitPK = document.getElementById('btn-exit-pk');
 if(btnExitPK) {
     btnExitPK.addEventListener('click', async () => {
-        // 1. 立即中斷 AI 請求 (如果正在進行中)
+        // 1. 立即中斷 AI 請求
         if (currentAbortController) {
             currentAbortController.abort();
             currentAbortController = null;
         }
 
-        // 2. 離開即視為 PK 失敗 (除非已經判定勝利)
-        if (currentPKContext.collection === 'bad_things' && currentPKContext.docId && !currentPKContext.isVictory) {
-            try {
-                const docRef = doc(db, 'bad_things', currentPKContext.docId);
-                await updateDoc(docRef, {
-                    isDefeated: false, // 標記為待 PK
-                    updatedAt: serverTimestamp()
-                });
-            } catch (e) {
-                console.error("Exit PK update failed:", e);
+        // 2. [核心邏輯] 只要是鳥事PK且未勝利，離開就視為失敗（回到待PK庫）
+        // 這裡會強制將 isDefeated 設為 false
+        if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
+            if (!currentPKContext.isVictory) {
+                try {
+                    const docRef = doc(db, 'bad_things', currentPKContext.docId);
+                    await updateDoc(docRef, {
+                        isDefeated: false, 
+                        updatedAt: serverTimestamp()
+                    });
+                    console.log("PK中斷，已重置為待PK狀態");
+                } catch (e) {
+                    console.error("Reset bad thing status failed:", e);
+                }
             }
         }
 
         screens.pk.classList.add('hidden');
         
-        // 3. 重新整理倉庫列表
+        // 3. 重整倉庫
         if (!screens.warehouse.classList.contains('hidden')) {
             const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
                                document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
@@ -370,11 +460,13 @@ onAuthStateChanged(auth, (user) => {
 
 // --- 7. 按鈕事件綁定 ---
 
-// [修改] 綁定主畫面的搜尋按鈕 -> 顯示提示
+// [修改] 綁定主畫面的搜尋按鈕 -> 開啟搜尋
 const btnSearch = document.getElementById('btn-search');
 if (btnSearch) {
     btnSearch.addEventListener('click', () => {
-        showSystemMessage("🔍 搜尋功能開發中...\n(請點擊左邊的資料夾圖示開啟倉庫)");
+        createSearchHTML(); // 確保 HTML 存在
+        document.getElementById('search-modal').classList.remove('hidden');
+        document.getElementById('input-search-keyword').focus();
     });
 }
 
@@ -434,7 +526,6 @@ async function handleSaveContent(shouldStartPK = false) {
         return;
     }
 
-    // 鎖定按鈕避免重複點擊
     const btnUsed = shouldStartPK ? btns.startPk : btns.saveEdit;
     const originalText = btnUsed.innerText;
     btnUsed.innerText = "處理中...";
@@ -442,10 +533,11 @@ async function handleSaveContent(shouldStartPK = false) {
 
     try {
         const collectionName = currentMode === 'good' ? 'good_things' : 'bad_things';
+        let targetId = editingId;
         
-        if (editingId) {
+        if (targetId) {
             // --- 編輯模式 ---
-            const docRef = doc(db, collectionName, editingId);
+            const docRef = doc(db, collectionName, targetId);
             await updateDoc(docRef, {
                 title: title,
                 content: content,
@@ -455,7 +547,8 @@ async function handleSaveContent(shouldStartPK = false) {
             });
         } else {
             // --- 新增模式 ---
-            await addDoc(collection(db, collectionName), {
+            // [修正] 取得新增後的文件參照，以便拿到 ID
+            const docRef = await addDoc(collection(db, collectionName), {
                 uid: currentUser.uid,
                 title: title,
                 content: content,
@@ -463,21 +556,27 @@ async function handleSaveContent(shouldStartPK = false) {
                 source: source,
                 createdAt: serverTimestamp()
             });
+            targetId = docRef.id;
         }
 
         screens.editor.classList.add('hidden'); 
 
         // [核心修改] 邏輯分流
         if (shouldStartPK) {
-            // 按下 PK -> 直接開始 PK
-            startPK({ title, content });
+            // [修正] 必須傳入 ID 與 Collection 名稱，這樣「離開」時才能正確重置狀態
+            startPK({ 
+                id: targetId, 
+                title, 
+                content,
+                score,
+                source,
+                chatLogs: []
+            }, collectionName); 
         } else {
-            // 按下 儲存 -> 顯示提示，不進入 PK
             const typeText = currentMode === 'good' ? '好事' : '鳥事';
             showSystemMessage(`✨ ${typeText}已儲存！`);
         }
         
-        // 如果倉庫開著，重整列表
         if (!screens.warehouse.classList.contains('hidden')) {
             loadWarehouseData(currentMode);
         }
@@ -1226,17 +1325,28 @@ injectSettingsButton();
 function createWarehouseHTML() {
     if (document.getElementById('warehouse-modal')) return;
 
+    // [修改] 增加 filter-row 分數篩選列
     const warehouseHTML = `
     <div id="warehouse-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:#FAFAFA; z-index:200; display: flex; flex-direction: column;">
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #FFF; border-bottom: 1px solid #EEE;">
             <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">卡片倉庫</div>
             <button id="btn-close-warehouse" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">關閉</button>
         </header>
-        <div style="padding: 10px 20px; display: flex; gap: 8px; overflow-x: auto;">
+        <div style="padding: 10px 20px 0 20px; display: flex; gap: 8px; overflow-x: auto;">
             <button id="tab-wins" style="flex: 1; min-width:80px; padding: 10px 5px; border: 1px solid #FBC02D; border-radius: 10px; background: #FFF9C4; color: #FBC02D; font-weight: 700; cursor: pointer; font-size:13px;">PK勝利</button>
             <button id="tab-good" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">好事庫</button>
             <button id="tab-bad" style="flex: 1; min-width:80px; padding: 10px 5px; border: none; border-radius: 10px; background: #EEE; color: #999; font-weight: 700; cursor: pointer; font-size:13px;">待PK鳥事</button>
         </div>
+        
+        <div id="filter-row" style="padding: 10px 20px; display: flex; gap: 8px; overflow-x: auto; align-items:center;">
+            <button class="filter-btn" data-score="0" style="padding:4px 12px; border-radius:15px; border:1px solid #DDD; background:#333; color:#FFF; font-size:12px; font-weight:bold; cursor:pointer; flex-shrink:0;">全部</button>
+            <button class="filter-btn" data-score="1" style="padding:4px 12px; border-radius:15px; border:1px solid #DDD; background:#FFF; color:#666; font-size:12px; cursor:pointer; flex-shrink:0;">1分</button>
+            <button class="filter-btn" data-score="2" style="padding:4px 12px; border-radius:15px; border:1px solid #DDD; background:#FFF; color:#666; font-size:12px; cursor:pointer; flex-shrink:0;">2分</button>
+            <button class="filter-btn" data-score="3" style="padding:4px 12px; border-radius:15px; border:1px solid #DDD; background:#FFF; color:#666; font-size:12px; cursor:pointer; flex-shrink:0;">3分</button>
+            <button class="filter-btn" data-score="4" style="padding:4px 12px; border-radius:15px; border:1px solid #DDD; background:#FFF; color:#666; font-size:12px; cursor:pointer; flex-shrink:0;">4分</button>
+            <button class="filter-btn" data-score="5" style="padding:4px 12px; border-radius:15px; border:1px solid #DDD; background:#FFF; color:#666; font-size:12px; cursor:pointer; flex-shrink:0;">5分+</button>
+        </div>
+
         <div id="warehouse-list" style="flex: 1; overflow-y: auto; padding: 0 20px 20px 20px; display: flex; flex-direction: column; gap: 10px;">
             <div style="text-align:center; color:#999; margin-top:50px;">載入中...</div>
         </div>
@@ -1250,36 +1360,47 @@ function createWarehouseHTML() {
         document.getElementById('warehouse-modal').classList.add('hidden');
     });
 
-    document.getElementById('tab-wins').addEventListener('click', () => loadWarehouseData('wins'));
-    document.getElementById('tab-good').addEventListener('click', () => loadWarehouseData('good'));
-    document.getElementById('tab-bad').addEventListener('click', () => loadWarehouseData('bad'));
+    const resetFilter = () => { currentWarehouseScoreFilter = 0; };
+    document.getElementById('tab-wins').addEventListener('click', () => { resetFilter(); loadWarehouseData('wins'); });
+    document.getElementById('tab-good').addEventListener('click', () => { resetFilter(); loadWarehouseData('good'); });
+    document.getElementById('tab-bad').addEventListener('click', () => { resetFilter(); loadWarehouseData('bad'); });
 
-    // [新增] 倉庫列表的事件監聽 (擊敗、編輯、刪除、回顧、再擊敗)
+    // [新增] 篩選按鈕事件
+    wrapper.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            currentWarehouseScoreFilter = parseInt(e.target.dataset.score);
+            // 找出目前的 Tab
+            const currentTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
+                               document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
+            loadWarehouseData(currentTab);
+        });
+    });
+
     const listEl = document.getElementById('warehouse-list');
     listEl.addEventListener('click', async (e) => {
         const target = e.target;
-        const action = target.dataset.action;
-        const id = target.dataset.id;
-        const winId = target.dataset.winId; 
+        // [修正] 往上尋找最近的 button，確保點擊 SVG 或 path 也能觸發
+        const btn = target.closest('button');
+        if (!btn) return;
+
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        const winId = btn.dataset.winId; 
 
         if (!action || !id) return;
         
         try {
             if (action === 'delete') {
                 if(confirm('確定要刪除這張卡片嗎？')) {
-                    // [修改] 判斷目前是哪個 Tab，以決定刪除邏輯
-                    const isWinTab = document.getElementById('tab-wins').style.background.includes('rgb(255, 215, 0)'); // #FFD700
+                    const isWinTab = document.getElementById('tab-wins').style.background.includes('rgb(255, 215, 0)'); 
                     const isBadTab = document.getElementById('tab-bad').style.background.includes('var(--bad-light)');
                     
                     if (isWinTab) {
-                        // --- 刪除勝利紀錄 (需還原鳥事狀態) ---
                         const winDoc = await getDoc(doc(db, 'pk_wins', id));
                         if (winDoc.exists()) {
                             const data = winDoc.data();
-                            // 如果這場勝利有對應的原始鳥事 ID
                             if (data.originalBadId) {
                                 const badRef = doc(db, 'bad_things', data.originalBadId);
-                                // 將鳥事還原為「未擊敗」狀態
                                 await updateDoc(badRef, {
                                     isDefeated: false,
                                     lastWinId: null,
@@ -1289,12 +1410,11 @@ function createWarehouseHTML() {
                         }
                         await deleteDoc(doc(db, 'pk_wins', id));
                     } else {
-                        // --- 刪除好事或鳥事 ---
                         const collectionName = isBadTab ? 'bad_things' : 'good_things';
                         await deleteDoc(doc(db, collectionName, id));
                     }
                     
-                    target.closest('.card-item').remove();
+                    btn.closest('.card-item').remove();
                 }
             } else if (action === 'edit') {
                 const isGoodTab = document.getElementById('tab-good').style.background.includes('var(--good-light)');
@@ -1307,17 +1427,14 @@ function createWarehouseHTML() {
             } else if (action === 'defeat') {
                 document.getElementById('warehouse-modal').classList.add('hidden');
                 
-                // [修改] 如果有 winId (表示是再擊敗)，優先載入勝利紀錄以還原場景
                 if (winId) {
                     const winSnap = await getDoc(doc(db, 'pk_wins', winId));
                     if (winSnap.exists()) {
-                        // 載入勝利畫面，這樣會顯示「重來」按鈕，回到步驟 2
                         startPK({ id: winSnap.id, ...winSnap.data() }, 'pk_wins');
                         return;
                     }
                 }
                 
-                // 否則載入普通鳥事
                 const docSnap = await getDoc(doc(db, 'bad_things', id));
                 if (docSnap.exists()) {
                     startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things');
@@ -1358,6 +1475,18 @@ async function loadWarehouseData(type) {
     const tabGood = document.getElementById('tab-good');
     const tabBad = document.getElementById('tab-bad');
     
+    // [修正] 更新篩選按鈕樣式
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        const score = parseInt(btn.dataset.score);
+        if (score === currentWarehouseScoreFilter) {
+            btn.style.background = '#333';
+            btn.style.color = '#FFF';
+        } else {
+            btn.style.background = '#FFF';
+            btn.style.color = '#666';
+        }
+    });
+
     listEl.innerHTML = '<div style="text-align:center; color:#999; margin-top:50px;">讀取中...</div>';
 
     // 重置所有 Tab 樣式
@@ -1371,7 +1500,6 @@ async function loadWarehouseData(type) {
     let emptyMsg = '';
 
     if (type === 'wins') {
-        // [修正] 勝利庫顏色 (淺黃背景/深黃文字/加邊框)
         if(tabWins) { tabWins.style.background = '#FFF9C4'; tabWins.style.color = '#FBC02D'; tabWins.style.border = '1px solid #FBC02D'; } 
         collectionName = 'pk_wins';
         emptyMsg = '還沒有勝利紀錄喔！<br>快去 PK 幾場吧！';
@@ -1386,7 +1514,8 @@ async function loadWarehouseData(type) {
     }
 
     try {
-        const q = query(collection(db, collectionName), orderBy("createdAt", "desc"), limit(20));
+        // [修正] 為了做前端過濾，拉取數量稍微提高到 100
+        const q = query(collection(db, collectionName), orderBy("createdAt", "desc"), limit(100));
         const querySnapshot = await getDocs(q);
         
         listEl.innerHTML = ''; 
@@ -1396,9 +1525,23 @@ async function loadWarehouseData(type) {
             return;
         }
 
+        let hasData = false;
+
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             const docId = doc.id;
+            
+            // [新增] 前端分數過濾邏輯
+            const itemScore = data.score || 1;
+            if (currentWarehouseScoreFilter > 0) {
+                if (currentWarehouseScoreFilter === 5) {
+                    if (itemScore < 5) return;
+                } else {
+                    if (itemScore !== currentWarehouseScoreFilter) return;
+                }
+            }
+            hasData = true;
+
             const date = data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : '剛剛';
             
             let cardBg = '#FFF';
@@ -1408,11 +1551,12 @@ async function loadWarehouseData(type) {
             let displayTitle = data.title;
             let displayContent = data.content;
             
-            // [修正] 按鈕樣式 (單色、無背景、SVG圖示)
-            const iconEdit = `<svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:none; stroke:#888; stroke-width:2;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
-            const iconTrash = `<svg viewBox="0 0 24 24" style="width:18px; height:18px; fill:none; stroke:#888; stroke-width:2;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+            // [修正] 按鈕樣式：增加 pointer-events:none 給 SVG，並加大尺寸至 44px
+            const iconEdit = `<svg style="pointer-events:none; width:20px; height:20px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
+            const iconTrash = `<svg style="pointer-events:none; width:20px; height:20px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
             
-            const btnStyle = `width:36px; height:36px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center;`;
+            // [修正] 加大有效點擊區域 (44px)
+            const btnStyle = `width:44px; height:44px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;`;
 
             if (type === 'good') { 
                 iconColor = 'var(--good-icon)'; 
@@ -1440,7 +1584,8 @@ async function loadWarehouseData(type) {
                     displayTitle = displayTitle + extraTitle;
                 }
 
-                const defeatBtnStyle = `height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; color:#FFF; background:${btnDefeatColor};`;
+                // 擊敗按鈕也稍微加大高
+                const defeatBtnStyle = `height:40px; padding:0 20px; border-radius:20px; border:none; cursor:pointer; font-weight:bold; font-size:14px; color:#FFF; background:${btnDefeatColor};`;
 
                 actionButtonsHTML = `
                     <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end; align-items:center;">
@@ -1458,7 +1603,7 @@ async function loadWarehouseData(type) {
 
                 actionButtonsHTML = `
                     <div style="display:flex; gap:8px; margin-top:10px; border-top:1px solid #F0F0F0; padding-top:10px; justify-content:flex-end;">
-                        <button data-action="review" data-id="${docId}" style="height:36px; padding:0 16px; border-radius:18px; border:none; cursor:pointer; font-weight:bold; font-size:13px; background:#FFF9C4; color:#FBC02D;">回顧勝利</button>
+                        <button data-action="review" data-id="${docId}" style="height:40px; padding:0 20px; border-radius:20px; border:none; cursor:pointer; font-weight:bold; font-size:13px; background:#FFF9C4; color:#FBC02D;">回顧勝利</button>
                         <button data-action="delete" data-id="${docId}" style="${btnStyle}" title="刪除">${iconTrash}</button>
                     </div>
                 `;
@@ -1480,6 +1625,10 @@ async function loadWarehouseData(type) {
             `;
             listEl.insertAdjacentHTML('beforeend', cardHTML);
         });
+        
+        if (!hasData) {
+            listEl.innerHTML = `<div style="text-align:center; color:#CCC; margin-top:50px; line-height:1.6;">沒有符合篩選條件的卡片</div>`;
+        }
 
     } catch (e) {
         console.error("Load Error:", e);
