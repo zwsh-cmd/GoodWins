@@ -115,6 +115,17 @@ function createGlobalComponents() {
     }
     metaTheme.content = "#FAFAFA";
 
+    // [新增] 2. 注入全域 CSS 禁止下拉重新整理與回彈 (Overscroll Fix)
+    // 這能解決手機下拉時出現的灰色背景或重新整理圖示
+    const globalStyle = document.createElement('style');
+    globalStyle.innerHTML = `
+        html, body {
+            overscroll-behavior-y: none; /* 禁止下拉重整行為 */
+            background-color: #FAFAFA;   /* 確保背景色一致 */
+        }
+    `;
+    document.head.appendChild(globalStyle);
+
     const wrapper = document.getElementById('mobile-wrapper');
     if(!wrapper) return;
 
