@@ -240,17 +240,53 @@ function createPKScreenHTML() {
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', pkHTML);
         
-        // --- [修改] 展開箭頭邏輯 ---
+        // --- [修改] 展開箭頭邏輯 (全寬覆蓋模式) ---
         wrapper.querySelectorAll('.expand-arrow').forEach(arrow => {
             arrow.addEventListener('click', (e) => {
-                e.stopPropagation(); // 阻止冒泡，避免點擊深色區域觸發投票
-                const p = arrow.previousElementSibling.querySelector('p');
-                if (p) {
-                    if (p.style.webkitLineClamp === 'unset') {
+                e.stopPropagation(); // 阻止冒泡
+                
+                const card = arrow.closest('.action-card');
+                const p = card.querySelector('p');
+                const isExpanded = card.classList.contains('expanded-mode');
+                
+                // 找出另一張卡片 (為了隱藏它或處理層級)
+                const isBad = card.id === 'btn-pk-bad';
+                const otherCard = isBad ? document.getElementById('btn-pk-good') : document.getElementById('btn-pk-bad');
+
+                if (isExpanded) {
+                    // --- 還原模式 ---
+                    card.classList.remove('expanded-mode');
+                    // 清除強制樣式
+                    card.style.position = '';
+                    card.style.width = '';
+                    card.style.height = '';
+                    card.style.zIndex = '';
+                    card.style.left = '';
+                    card.style.top = '';
+                    
+                    // 顯示另一張卡
+                    if(otherCard) otherCard.style.opacity = '1';
+
+                    if (p) {
                         p.style.webkitLineClamp = '3';
                         arrow.innerText = '▼';
-                    } else {
-                        p.style.webkitLineClamp = 'unset';
+                    }
+                } else {
+                    // --- 放大覆蓋模式 ---
+                    card.classList.add('expanded-mode');
+                    // 設定絕對定位以覆蓋父容器
+                    card.style.position = 'absolute';
+                    card.style.zIndex = '50';
+                    card.style.top = '0';
+                    card.style.left = '0';
+                    card.style.width = '100%'; // 填滿容器 (即延伸到左右邊界，扣除容器原本的 padding)
+                    card.style.height = '100%'; // 填滿高度
+                    
+                    // 隱藏另一張卡避免干擾
+                    if(otherCard) otherCard.style.opacity = '0';
+
+                    if (p) {
+                        p.style.webkitLineClamp = 'unset'; // 顯示全文
                         arrow.innerText = '▲';
                     }
                 }
@@ -472,19 +508,24 @@ if(btnExitPK) {
             
             screens.pk.classList.add('hidden');
             
-            // 重整倉庫
-            if (!screens.warehouse.classList.contains('hidden')) {
-                // 如果有指定 tab 就切換，否則維持現狀
+            // [修正] 導航邏輯：如果有指定目標分頁 (例如 wins/bad)，強制開啟倉庫並載入
+            if (targetTab || !screens.warehouse.classList.contains('hidden')) {
+                if (screens.warehouse) screens.warehouse.classList.remove('hidden');
+                
                 let tabToLoad = targetTab;
+                // 如果沒指定，嘗試判斷當前停留的分頁
                 if (!tabToLoad) {
                     tabToLoad = document.getElementById('tab-bad').style.background.includes('var(--bad-light)') ? 'bad' : 
                                 document.getElementById('tab-good').style.background.includes('var(--good-light)') ? 'good' : 'wins';
-                } else {
-                    const tabBtn = document.getElementById(`tab-${targetTab}`);
-                    if(tabBtn) tabBtn.click(); 
-                    return; 
                 }
-                loadWarehouseData(tabToLoad);
+
+                // 觸發切換
+                const tabBtn = document.getElementById(`tab-${tabToLoad}`);
+                if(tabBtn) {
+                     tabBtn.click();
+                } else {
+                     loadWarehouseData(tabToLoad);
+                }
             }
         };
 
@@ -803,8 +844,9 @@ async function aiPickBestCard(badData, candidateDocs) {
         }
     }
 
-    console.warn("AI 選牌全數失敗，將降級為隨機挑選");
-    return null;
+    console.warn("AI 選牌全數失敗");
+    showSystemMessage("目前找不到適合的AI模型，請稍後再試一次。");
+    return "AI_FAILED"; // 回傳特殊字串，告知上層停止
 }
 
 async function startPK(data, collectionSource) {
@@ -887,10 +929,22 @@ async function startPK(data, collectionSource) {
 
                     selectedGoodThing = await aiPickBestCard(data, docs);
 
+                    // [修正] 如果 AI 失敗，直接停止，不進行隨機挑選
+                    if (selectedGoodThing === "AI_FAILED") {
+                        const loadingEl = document.getElementById('ai-selecting-msg');
+                        if(loadingEl) loadingEl.remove();
+                        // 保持畫面停留在 PK 初始狀態，或是關閉 PK 視窗皆可，這裡選擇保持但停止動作
+                        document.getElementById('pk-good-title').innerText = "連線失敗";
+                        document.getElementById('pk-good-content').innerText = "請檢查網路或稍後再試";
+                        return; 
+                    }
+
+                    // 防呆：如果不是失敗但回傳 null (極少見)，也不要隨機
                     if (!selectedGoodThing) {
-                        console.log("AI 選牌無效，使用隨機挑選");
-                        const randomDoc = docs[Math.floor(Math.random() * docs.length)];
-                        selectedGoodThing = randomDoc.data();
+                        showSystemMessage("目前找不到適合的AI模型，請稍後再試一次。");
+                        const loadingEl = document.getElementById('ai-selecting-msg');
+                        if(loadingEl) loadingEl.remove();
+                        return;
                     }
                     
                     currentPKContext.good = selectedGoodThing;
