@@ -406,7 +406,7 @@ function createPKScreenHTML() {
                     btnRePK.style.display = 'none'; 
                     
                     try {
-                        const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(20));
+                        const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000));
                         const querySnapshot = await getDocs(q);
                         
                         if (!querySnapshot.empty) {
@@ -854,43 +854,69 @@ let currentPKContext = { bad: null, good: null };
 
 // --- PK 核心邏輯 (保存對話版) ---
 
-// [修正] AI 智慧選牌模組：支援 ID 排除、低分剋高分邏輯
+// [修正] AI 智慧選牌模組：階級擴展搜尋邏輯
 async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey || candidateDocs.length === 0) return null;
 
-    console.log("AI 正在評估", candidateDocs.length, "張好事卡...");
-
-    // [修改] 支援陣列或單一字串的排除清單
+    // [核心修正] 排除清單統一轉為陣列
     const excludes = Array.isArray(excludeList) ? excludeList : (excludeList ? [excludeList] : []);
 
-    // [核心修正] 過濾邏輯：同時檢查 ID 與 Title 是否在排除清單中
-    // 這樣可以同時支援「歷史標題排除」與「當前對話 ID 排除」
-    const filteredDocs = candidateDocs.filter(doc => {
+    // 1. 先將所有原始文件過濾一次 (排除已出現的 ID)
+    const availableDocs = candidateDocs.filter(doc => {
         const data = doc.data();
         const isExcludedById = excludes.includes(doc.id);
         const isExcludedByTitle = excludes.includes(data.title);
         return !isExcludedById && !isExcludedByTitle;
     });
 
-    // 如果濾完沒牌了，只好從原名單隨機挑一張
-    if (filteredDocs.length === 0) {
+    if (availableDocs.length === 0) {
+        // 真的沒牌了，只好從原名單隨機挑一張 (避免當機)
         if (candidateDocs.length > 0) {
              const randomDoc = candidateDocs[Math.floor(Math.random() * candidateDocs.length)];
-             return { id: randomDoc.id, ...randomDoc.data() }; // 回傳含 ID
+             return { id: randomDoc.id, ...randomDoc.data() }; 
         }
         return null;
     }
 
-    // [修改] 加入 score 供 AI 判斷等級
-    const candidates = filteredDocs.map(doc => ({
+    // [核心演算法] 階級擴展搜尋 (Tiered Expansion Search)
+    const badScore = parseInt(badData.score) || 1;
+    let searchMaxScore = badScore;
+    let finalCandidates = [];
+
+    console.log(`[選牌] 鳥事等級 Lv.${badScore}，開始階級搜尋...`);
+
+    while (searchMaxScore <= 5) {
+        // 篩選：等級 <= 目前搜尋上限 的卡片
+        const pool = availableDocs.filter(doc => {
+            const s = parseInt(doc.data().score) || 1;
+            return s <= searchMaxScore;
+        });
+
+        if (pool.length > 0) {
+            finalCandidates = pool;
+            console.log(`[選牌] 在等級 Lv.1 ~ Lv.${searchMaxScore} 區間找到 ${pool.length} 張不重複的好事卡`);
+            break; // 找到了！跳出迴圈
+        } else {
+            console.log(`[選牌] 等級 Lv.1 ~ Lv.${searchMaxScore} 無牌，擴大搜尋範圍...`);
+            searchMaxScore++; // 擴大一階
+        }
+    }
+
+    // 如果擴大到 Lv.5 還是沒牌，則直接使用所有可用牌
+    if (finalCandidates.length === 0) {
+        finalCandidates = availableDocs;
+    }
+
+    // 製作給 AI 看的清單
+    const aiInputCandidates = finalCandidates.map(doc => ({
         id: doc.id,
         title: doc.data().title,
         score: doc.data().score || 1,
         content: (doc.data().content || "").substring(0, 50) + "..."
     }));
 
-    // [修改] 更新選牌邏輯 Prompt
+    // [保留] 您的最高指導原則 Prompt
     const selectionPrompt = `
     任務：你是「GoodWins」APP 的後台決策大腦。請從下列【候選好事卡清單】中，挑選唯一一張最能破解【眼前鳥事】的卡片。
 
@@ -900,7 +926,7 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     等級(Score)：${badData.score || 1}
 
     【候選好事卡清單】
-    ${JSON.stringify(candidates)}
+    ${JSON.stringify(aiInputCandidates)}
 
     【選牌邏輯】
     1. 屬性對比：選擇性質相反的事件（例：被罵 vs 被稱讚）。
@@ -940,9 +966,8 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
 
             const selectedId = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
             if (selectedId) {
-                // 從過濾後的清單中找
-                const bestDoc = filteredDocs.find(doc => doc.id === selectedId);
-                // [核心修正] 務必回傳 ID，讓外層可以記錄到 excludeList
+                // 從過濾後的清單中找回完整物件
+                const bestDoc = finalCandidates.find(doc => doc.id === selectedId);
                 return bestDoc ? { id: bestDoc.id, ...bestDoc.data() } : null;
             }
         } catch (e) {
@@ -1030,8 +1055,8 @@ async function startPK(data, collectionSource, options = {}) {
         document.getElementById('pk-good-content').innerText = "正在從資料庫挑選最佳策略...";
         
         try {
-            // [修改] 1. 讀取好事庫(20) & 勝利紀錄擴大到 10 筆 (滿足使用者需求)
-            const p1 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(20)));
+            // [修改] 1. 讀取好事庫(1000) & 勝利紀錄擴大到 10 筆 (滿足使用者需求)
+            const p1 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000)));
             const p2 = getDocs(query(collection(db, "pk_wins"), orderBy("createdAt", "desc"), limit(10)));
             
             const [querySnapshot, winsSnapshot] = await Promise.all([p1, p2]);
