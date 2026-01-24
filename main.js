@@ -1611,14 +1611,14 @@ if(btnOpenWarehouse) {
     });
 }
 
-// 載入倉庫資料 (支援三大類)
+// 載入倉庫資料 (支援三大類 & 前端混合排序)
 async function loadWarehouseData(type) {
     const listEl = document.getElementById('warehouse-list');
     const tabWins = document.getElementById('tab-wins');
     const tabGood = document.getElementById('tab-good');
     const tabBad = document.getElementById('tab-bad');
     
-    // [修正] 更新篩選按鈕樣式
+    // 更新篩選按鈕樣式
     document.querySelectorAll('.filter-btn').forEach(btn => {
         const score = parseInt(btn.dataset.score);
         if (score === currentWarehouseScoreFilter) {
@@ -1657,9 +1657,9 @@ async function loadWarehouseData(type) {
     }
 
     try {
-        // [修正] 改為依照 updatedAt (最後更新時間) 排序，實現「後修改的放上面」
-        // 剛互動過的卡片 updatedAt 會最新，所以會置頂
-        const q = query(collection(db, collectionName), orderBy("updatedAt", "desc"), limit(100));
+        // [策略修正] 
+        // 1. 資料庫查詢：使用 createdAt (建立時間) 抓取，確保所有資料（含舊資料與勝利紀錄）都能被抓到，不會消失。
+        const q = query(collection(db, collectionName), orderBy("createdAt", "desc"), limit(100));
         const querySnapshot = await getDocs(q);
         
         listEl.innerHTML = ''; 
@@ -1669,13 +1669,30 @@ async function loadWarehouseData(type) {
             return;
         }
 
+        // [策略修正]
+        // 2. 前端排序：將抓下來的資料轉為陣列，依照 updatedAt (若有) 優先排序，沒有則用 createdAt。
+        // 這樣可以實現「後修改的放上面」，同時不漏掉任何資料。
+        let docs = [];
+        querySnapshot.forEach(doc => docs.push(doc));
+
+        docs.sort((a, b) => {
+            const dataA = a.data();
+            const dataB = b.data();
+            // 取得時間戳 (毫秒)，優先用 updatedAt，沒有則用 createdAt
+            const timeA = dataA.updatedAt?.toMillis() || dataA.createdAt?.toMillis() || 0;
+            const timeB = dataB.updatedAt?.toMillis() || dataB.createdAt?.toMillis() || 0;
+            return timeB - timeA; // 降冪 (時間越新的數字越大，放前面)
+        });
+
         let hasData = false;
 
-        querySnapshot.forEach((doc) => {
+        // [策略修正]
+        // 3. 渲染迴圈：改用排序後的 docs 陣列
+        docs.forEach((doc) => {
             const data = doc.data();
             const docId = doc.id;
             
-            // [新增] 前端分數過濾邏輯
+            // 前端分數過濾邏輯
             const itemScore = data.score || 1;
             if (currentWarehouseScoreFilter > 0) {
                 if (currentWarehouseScoreFilter === 5) {
@@ -1695,11 +1712,9 @@ async function loadWarehouseData(type) {
             let displayTitle = data.title;
             let displayContent = data.content;
             
-            // [修正] 按鈕樣式：增加 pointer-events:none 給 SVG，並加大尺寸至 44px
             const iconEdit = `<svg style="pointer-events:none; width:20px; height:20px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
             const iconTrash = `<svg style="pointer-events:none; width:20px; height:20px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
             
-            // [修正] 加大有效點擊區域 (44px)
             const btnStyle = `width:44px; height:44px; border-radius:50%; border:1px solid #EEE; background:#FFF; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;`;
 
             if (type === 'good') { 
@@ -1720,18 +1735,16 @@ async function loadWarehouseData(type) {
                 let btnDefeatText = "擊敗它";
                 let btnDefeatColor = "var(--primary)";
                 let extraTitle = "";
-                let winIdAttr = ""; // [新增] 預設為空
+                let winIdAttr = ""; 
                 
                 if (data.isDefeated) {
                     btnDefeatText = "再擊敗";
                     btnDefeatColor = "#FF9800"; 
                     extraTitle = `<span style="font-size:12px; color:#4CAF50; margin-left:5px;">(已被擊敗)</span>`;
                     displayTitle = displayTitle + extraTitle;
-                    // [修正] 只有當真正已擊敗時，才允許綁定 winId
                     winIdAttr = data.lastWinId || ""; 
                 }
 
-                // 擊敗按鈕也稍微加大高
                 const defeatBtnStyle = `height:40px; padding:0 20px; border-radius:20px; border:none; cursor:pointer; font-weight:bold; font-size:14px; color:#FFF; background:${btnDefeatColor};`;
 
                 actionButtonsHTML = `
