@@ -19,6 +19,10 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
+// --- 監控代碼：全域計數器 ---
+window.apiCallCount = 0;    // API 實際發送次數
+window.pkTriggerCount = 0;  // PK 畫面進入次數
+
 // --- 4. 動態生成 UI (這就是妳要的：介面寫在 JS 裡) ---
 function createEditorHTML() {
     if (document.getElementById('editor-modal')) return;
@@ -920,6 +924,10 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     
     for (const model of modelList) {
         try {
+            // --- 監控：紀錄選牌 API 發送 ---
+            window.apiCallCount++;
+            console.warn(`[監控] 準備發送 API (選牌)！目前累積發送 ${window.apiCallCount} 次`);
+
             console.log(`[選牌] 嘗試使用：${model.id}`);
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
                 method: 'POST',
@@ -950,7 +958,11 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
 }
 
 async function startPK(data, collectionSource, options = {}) {
-    history.pushState({ tier: 'pk' }, '', ''); 
+    // --- 監控：紀錄進入 PK 擂台 ---
+    window.pkTriggerCount++;
+    console.warn(`[監控] startPK 被觸發！目前進入第 ${window.pkTriggerCount} 次`);
+
+    history.pushState({ tier: 'pk' }, '', '');
     screens.pk.classList.remove('hidden');
     const chatHistory = document.getElementById('chat-history');
     chatHistory.innerHTML = ''; 
@@ -1301,6 +1313,10 @@ ${goodText}
                 if (signal.aborted) throw new Error("AbortError");
 
                 try {
+                    // --- 監控：紀錄聊天 API 發送 ---
+                    window.apiCallCount++;
+                    console.warn(`[監控] 準備發送 API (對話)！目前累積發送 ${window.apiCallCount} 次`);
+
                     console.log(`[聊天] 嘗試連線模型: ${model.id} ...`);
                     // [新增] 介面顯示當前嘗試的模型
                     updateLoadingMsg(`嘗試連線 AI 模型 (${model.id})...`);
