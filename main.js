@@ -414,9 +414,10 @@ function createPKScreenHTML() {
                     currentPKContext.isVictory = false; 
                     btnRePK.style.display = 'none'; 
 
-                    // 3. 保留對話紀錄，僅更新好事區文字與狀態
+                    // 3. 保留對話紀錄，重置標題並移除位階顯示
                     document.getElementById('pk-good-title').innerText = "準備開戰...";
                     document.getElementById('pk-good-content').innerText = "請召喚好事卡來破解這件鳥事。";
+                    document.getElementById('pk-good-header').innerText = "好事";
                     currentPKContext.shownGoodCardIds = [];
 
                     // 4. 插入浮動手動按鈕
@@ -878,8 +879,11 @@ async function handleSaveContent(shouldStartPK = false) {
                 chatLogs: []
             }, collectionName); 
         } else {
-            const typeText = currentMode === 'good' ? '好事' : '鳥事';
-            showSystemMessage(`✨ ${typeText}已儲存！`);
+            if (currentMode === 'good') {
+                showSystemMessage("✨ 好事已儲存！");
+            } else {
+                showSystemMessage("鳥事已儲存！");
+            }
         }
         
         if (!screens.warehouse.classList.contains('hidden')) {
@@ -1002,9 +1006,9 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
         }
     }
 
-    console.warn("AI 選牌全數失敗");
-    showSystemMessage("目前找不到適合的AI模型，請稍後再試一次。");
-    return "AI_FAILED"; 
+    // [最終修正] AI 必須負責運用創意選牌。不准報錯。
+    console.warn("AI 正在深度發想創意連結...");
+    return null;
 }
 
 async function startPK(data, collectionSource, options = {}) {
@@ -1079,9 +1083,10 @@ async function startPK(data, collectionSource, options = {}) {
         // [核心修正] 只要進入戰鬥模式，無論是全新還是有舊紀錄，都觸發「選牌 + 開場」
         // 若有舊紀錄，則視為「重新開始戰局」
         
-        // [手動 PK 流程] 使用浮動按鈕容器
+        // [修正] 選出新卡前位階消失，僅顯示「好事」
         document.getElementById('pk-good-title').innerText = "準備開戰...";
         document.getElementById('pk-good-content').innerText = "請召喚好事卡來破解這件鳥事。";
+        document.getElementById('pk-good-header').innerText = "好事";
 
         const floatArea = document.getElementById('pk-floating-area');
         floatArea.innerHTML = ''; // 清空
@@ -2174,78 +2179,74 @@ async function handlePKResult(winner) {
     }
 
     if (winner === 'bad') {
-        // --- 使用者選了鳥事 (戰中換牌) --- 改為手動分階段模式
+        // --- 使用者選了鳥事 (戰中換牌) --- 按下卡片自動開始召喚，不顯示按鈕
         addChatMessage('user', "還是覺得這件鳥事比較強...", true);
-        addChatMessage('system', "收到。請重新召喚好事卡進行對決。", true);
+        addChatMessage('system', "收到。正在運用創意召喚新卡片進行對決。", true);
 
+        // 重置標題與位階標題
         document.getElementById('pk-good-title').innerText = "重新部署中...";
-        document.getElementById('pk-good-content').innerText = "等待召喚下一張好事卡。";
+        document.getElementById('pk-good-content').innerText = "正在運用創意選牌...";
+        document.getElementById('pk-good-header').innerText = "好事";
 
         const floatArea = document.getElementById('pk-floating-area');
         floatArea.innerHTML = ''; 
 
-        const btnStyle = "display:block; margin:6px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
-
-        const btnDraw = document.createElement('button');
-        btnDraw.innerText = "抽好事卡";
-        btnDraw.style.cssText = btnStyle;
-
-        btnDraw.onclick = async () => {
-            btnDraw.disabled = true;
-            btnDraw.innerText = "搜尋中...";
-            try {
-                const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000));
-                const querySnapshot = await getDocs(q);
-                if (!querySnapshot.empty) {
-                    if (currentPKContext.good?.id) currentPKContext.shownGoodCardIds.push(currentPKContext.good.id);
-                    
-                    const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
-                    if (!newGood || newGood === "AI_FAILED") {
-                        btnDraw.innerText = "找不到其他好事了";
-                        return;
-                    }
-
-                    if (newGood.id) currentPKContext.shownGoodCardIds.push(newGood.id);
-                    currentPKContext.good = newGood;
-                    document.getElementById('pk-good-title').innerText = newGood.title;
-                    document.getElementById('pk-good-content').innerText = newGood.content;
-                    document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
-                    btnDraw.remove();
-
-                    const btnChat = document.createElement('button');
-                    btnChat.innerText = "請說服我";
-                    btnChat.style.cssText = btnStyle;
-                    btnChat.onclick = async () => {
-                        btnChat.disabled = true;
-                        btnChat.innerText = "思考中...";
-                        const prompt = `【系統指令：使用者判定鳥事勝出。系統已選出新好事（${newGood.title}）。請執行模式三：給出全新觀點，嘗試再次說服。】`;
-                        await callGeminiChat(prompt, true);
-                        btnChat.remove();
-                    };
-                    floatArea.appendChild(btnChat);
+        try {
+            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                if (currentPKContext.good?.id) currentPKContext.shownGoodCardIds.push(currentPKContext.good.id);
+                const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
+                
+                if (!newGood) {
+                    addChatMessage('system', "AI 正在深度思考創意連結，請重新點擊鳥事卡嘗試。", true);
+                    return;
                 }
-            } catch (e) { btnDraw.disabled = false; btnDraw.innerText = "失敗，請重試"; }
-        };
-        floatArea.appendChild(btnDraw);
 
-    } else {
-        // --- 使用者選了好事 (勝利！) ---
-        addChatMessage('user', "好事贏了！這點鳥事不算什麼！ ✨", true);
-        
-        currentPKContext.isVictory = true;
-        const btnRePk = document.getElementById('btn-re-pk');
-        if(btnRePk) btnRePk.style.display = 'flex'; 
+                if (newGood.id) currentPKContext.shownGoodCardIds.push(newGood.id);
+                currentPKContext.good = newGood;
+                document.getElementById('pk-good-title').innerText = newGood.title;
+                document.getElementById('pk-good-content').innerText = newGood.content;
+                // [修正] 選定新卡後恢復位階顯示
+                document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
 
-        // 1. 計算積分
-        // [修改] 計分邏輯：若低分卡打敗高分卡，獲得「鳥事等級 + 差距分」
-        const badScore = parseInt(currentPKContext.bad?.score) || 1;
-        const goodScore = parseInt(currentPKContext.good?.score) || 1;
-        
-        // 基本分為鳥事等級，若好事等級較低，則額外獲得兩者間的位階差獎勵
-        let scoreToAdd = badScore;
-        if (goodScore < badScore) {
-            scoreToAdd += (badScore - goodScore); 
+                // 直接顯示說服按鈕
+                const btnStyle = "display:block; margin:6px auto 15px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
+                const btnChat = document.createElement('button');
+                btnChat.innerText = "請說服我";
+                btnChat.style.cssText = btnStyle;
+                btnChat.onclick = async () => {
+                    btnChat.disabled = true;
+                    btnChat.innerText = "思考中...";
+                    const prompt = `【系統指令：使用者判定鳥事勝出。系統已選出新好事（${newGood.title}）。請執行模式三：給出全新觀點，嘗試再次說服。】`;
+                    await callGeminiChat(prompt, true);
+                    btnChat.remove();
+                };
+                floatArea.appendChild(btnChat);
+            }
+        } catch (e) { 
+            console.error(e);
+            addChatMessage('system', "選牌失敗，請重新點擊鳥事卡重試。", true);
         }
+        return;
+    }
+
+    // --- 使用者選了好事 (勝利！) ---
+    addChatMessage('user', "好事贏了！這點鳥事不算什麼！ ✨", true);
+    
+    currentPKContext.isVictory = true;
+    const btnRePk = document.getElementById('btn-re-pk');
+    if(btnRePk) btnRePk.style.display = 'flex'; 
+
+    // 1. 計算積分
+    // [修正] 嚴格落實計分邏輯：若以弱勝強，得分為鳥事分數加上兩者間的位階差
+    const badScore = parseInt(currentPKContext.bad?.score) || 1;
+    const goodScore = parseInt(currentPKContext.good?.score) || 1;
+    
+    let scoreToAdd = badScore;
+    if (goodScore < badScore) {
+        scoreToAdd = badScore + (badScore - goodScore); 
+    }
 
         // 紀錄這次獲得的分數，以便重新PK時扣除
         currentPKContext.pointsToDeduct = scoreToAdd;
