@@ -268,7 +268,7 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 75px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 60px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
                 <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
