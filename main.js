@@ -268,7 +268,7 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 50px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 40px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
                 <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
@@ -1279,7 +1279,7 @@ ${goodText}
    - 使用台灣日常口語（如：很煩、傻眼、太誇張了、其實蠻溫暖的）。
    - 語氣要堅定但溫柔，展現出「我懂你，但這件事值得你看看」的態度。
 
-【回應限制】請將回應長度控制在 150 個中文字以內。
+【回應限制】請將回應長度控制在 200 個中文字以內。
         `;
 
         let success = false;
