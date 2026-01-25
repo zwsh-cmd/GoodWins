@@ -268,9 +268,9 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 100px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 75px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
-                <div id="pk-floating-area" style="position: absolute; bottom: 82px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
+                <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
                 <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF; z-index: 25;">
                     <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px;">
@@ -879,6 +879,9 @@ async function handleSaveContent(shouldStartPK = false) {
                 chatLogs: []
             }, collectionName); 
         } else {
+            // [修正導航] 僅儲存時，執行「上一頁」回到倉庫，避免歷史紀錄卡在編輯器狀態
+            history.back();
+
             if (currentMode === 'good') {
                 showSystemMessage("✨ 好事已儲存！");
             } else {
