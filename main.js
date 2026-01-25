@@ -1144,7 +1144,7 @@ async function getSortedModelList(apiKey) {
     return [
         { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' },
         { id: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash-Lite' },
-        { id: 'gemini-1.5-flash-latest', displayName: 'Gemini 1.5 Flash (最穩定)' }
+        { id: 'gemini-1.5-flash', displayName: 'Gemini 1.5 Flash (最穩定)' }
     ];
 }
 
