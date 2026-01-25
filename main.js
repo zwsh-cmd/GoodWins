@@ -2305,7 +2305,7 @@ async function handlePKResult(winner) {
         // [修正] 假裝是 AI 說的話 (role='ai')，但不扣 Token
         addChatMessage('ai', "恭喜！能夠戰勝這件鳥事，代表你又變得更強大了。這場勝利已為你保留。", true);
     }
-}
+
 
 // 更新使用者積分
 async function updateUserScore(scoreToAdd) {
