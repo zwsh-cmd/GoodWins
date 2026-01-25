@@ -270,7 +270,7 @@ function createPKScreenHTML() {
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
                 <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 100px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
-                <div id="pk-floating-area" style="position: absolute; bottom: 68px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
+                <div id="pk-floating-area" style="position: absolute; bottom: 82px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
                 <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF; z-index: 25;">
                     <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px;">
@@ -422,7 +422,7 @@ function createPKScreenHTML() {
                     // 4. 插入浮動手動按鈕
                     const floatArea = document.getElementById('pk-floating-area');
                     floatArea.innerHTML = '';
-                    const btnStyle = "display:block; margin:2px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
+                    const btnStyle = "display:block; margin:6px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
                     
                     const btnDraw = document.createElement('button');
                     btnDraw.innerText = "抽好事卡";
@@ -445,7 +445,7 @@ function createPKScreenHTML() {
                                 currentPKContext.good = newGood;
                                 document.getElementById('pk-good-title').innerText = newGood.title;
                                 document.getElementById('pk-good-content').innerText = newGood.content;
-                                document.getElementById('pk-good-header').innerText = "好事";
+                                document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
                                 btnDraw.remove();
 
                                 const btnChat = document.createElement('button');
@@ -1086,7 +1086,7 @@ async function startPK(data, collectionSource, options = {}) {
         const floatArea = document.getElementById('pk-floating-area');
         floatArea.innerHTML = ''; // 清空
 
-        const btnStyle = "display:block; margin:2px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
+        const btnStyle = "display:block; margin:6px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
 
         const btnDraw = document.createElement('button');
         btnDraw.innerText = "抽好事卡";
@@ -1108,7 +1108,7 @@ async function startPK(data, collectionSource, options = {}) {
                     currentPKContext.good = selectedGoodThing;
                     document.getElementById('pk-good-title').innerText = selectedGoodThing.title;
                     document.getElementById('pk-good-content').innerText = selectedGoodThing.content;
-                    document.getElementById('pk-good-header').innerText = "好事";
+                    document.getElementById('pk-good-header').innerText = `好事 (Lv.${selectedGoodThing.score || 1})`;
                     btnDraw.remove();
 
                     const btnChat = document.createElement('button');
@@ -2184,7 +2184,7 @@ async function handlePKResult(winner) {
         const floatArea = document.getElementById('pk-floating-area');
         floatArea.innerHTML = ''; 
 
-        const btnStyle = "display:block; margin:2px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
+        const btnStyle = "display:block; margin:6px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
 
         const btnDraw = document.createElement('button');
         btnDraw.innerText = "抽好事卡";
@@ -2209,7 +2209,7 @@ async function handlePKResult(winner) {
                     currentPKContext.good = newGood;
                     document.getElementById('pk-good-title').innerText = newGood.title;
                     document.getElementById('pk-good-content').innerText = newGood.content;
-                    document.getElementById('pk-good-header').innerText = "好事";
+                    document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
                     btnDraw.remove();
 
                     const btnChat = document.createElement('button');
@@ -2240,10 +2240,11 @@ async function handlePKResult(winner) {
         // [修改] 計分邏輯：若低分卡打敗高分卡，獲得「鳥事等級 + 差距分」
         const badScore = parseInt(currentPKContext.bad?.score) || 1;
         const goodScore = parseInt(currentPKContext.good?.score) || 1;
+        
+        // 基本分為鳥事等級，若好事等級較低，則額外獲得兩者間的位階差獎勵
         let scoreToAdd = badScore;
-
         if (goodScore < badScore) {
-            scoreToAdd = badScore + (badScore - goodScore);
+            scoreToAdd += (badScore - goodScore); 
         }
 
         // 紀錄這次獲得的分數，以便重新PK時扣除
