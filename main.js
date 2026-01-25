@@ -227,13 +227,18 @@ function createPKScreenHTML() {
         <header style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: transparent;">
             <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">PK 擂台</div>
             <div style="display:flex; gap:10px; align-items:center;">
-                <button id="btn-open-warehouse" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:var(--primary); font-weight:bold;">倉庫</button>
+                <div style="position: relative;">
+                    <button id="btn-pk-menu" style="background:none; border:none; padding:8px; cursor:pointer; font-size:20px; color:#999; font-weight:bold; line-height:1;">⋮</button>
+                    <div id="pk-dropdown-menu" class="hidden" style="position: absolute; right: 0; top: 40px; background: #FFF; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border: 1px solid #EEE; width: 160px; z-index: 300; overflow: hidden;">
+                        <button id="btn-pk-to-warehouse" style="width: 100%; padding: 12px 16px; border: none; background: none; text-align: left; font-size: 14px; color: #666; cursor: pointer; border-bottom: 1px solid #F5F5F5;">卡片倉庫</button>
+                        <button id="btn-clear-chat" style="width: 100%; padding: 12px 16px; border: none; background: none; text-align: left; font-size: 14px; color: #FF5252; cursor: pointer;">刪除所有對話</button>
+                    </div>
+                </div>
                 <button id="btn-exit-pk" style="background:none; border:none; padding:8px; cursor:pointer; font-size:14px; color:#999;">離開</button>
             </div>
         </header>
 
         <main style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 15px;">
-            
             <div style="display: flex; align-items: stretch; gap: 10px; flex-shrink: 0; position: relative;">
                 <div id="btn-pk-bad" class="action-card" style="flex: 1; cursor: pointer; padding: 20px 20px 0 20px; background: var(--bad-light); border: 2px solid transparent; border-radius: 20px; display: flex; flex-direction: column; gap: 8px; transition: transform 0.2s; text-align: left; overflow:hidden;">
                     <div id="pk-bad-header" style="color: var(--bad-icon); font-size: 13px; font-weight: 700;">鳥事</div>
@@ -259,18 +264,17 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 100px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
-                <div id="pk-floating-area" style="position: absolute; bottom: 75px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
+                <div id="pk-floating-area" style="position: absolute; bottom: 85px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
-                <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF;">
+                <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF; z-index: 25;">
                     <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px;">
                     <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
                 </div>
             </div>
-
         </main>
     </div>
     `;
@@ -406,9 +410,7 @@ function createPKScreenHTML() {
                     currentPKContext.isVictory = false; 
                     btnRePK.style.display = 'none'; 
 
-                    // 3. 清空對話 UI 與好事區文字
-                    const chatHistory = document.getElementById('chat-history');
-                    chatHistory.innerHTML = '';
+                    // 3. 保留對話紀錄，僅更新好事區文字與狀態
                     document.getElementById('pk-good-title').innerText = "準備開戰...";
                     document.getElementById('pk-good-content').innerText = "請召喚好事卡來破解這件鳥事。";
                     currentPKContext.shownGoodCardIds = [];
@@ -416,7 +418,7 @@ function createPKScreenHTML() {
                     // 4. 插入浮動手動按鈕
                     const floatArea = document.getElementById('pk-floating-area');
                     floatArea.innerHTML = '';
-                    const btnStyle = "display:block; margin:5px auto; padding:10px 24px; background:var(--primary); color:#FFF; border:none; border-radius:50px; font-weight:bold; font-size:14px; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.2); pointer-events: auto;";
+                    const btnStyle = "display:block; margin:5px auto; padding:8px 20px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 12px rgba(251,192,45,0.15); pointer-events: auto;";
                     
                     const btnDraw = document.createElement('button');
                     btnDraw.innerText = "抽好事卡";
@@ -463,6 +465,44 @@ function createPKScreenHTML() {
     }
 }
 createPKScreenHTML();
+
+// --- [選單邏輯] 處理 PK 畫面的選單與刪除對話 ---
+const btnPkMenu = document.getElementById('btn-pk-menu');
+const pkDropdown = document.getElementById('pk-dropdown-menu');
+
+if(btnPkMenu) {
+    btnPkMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        pkDropdown.classList.toggle('hidden');
+    });
+}
+
+// 點擊空白處關閉選單
+document.addEventListener('click', () => {
+    if(pkDropdown) pkDropdown.classList.add('hidden');
+});
+
+// 選單：開啟倉庫
+document.getElementById('btn-pk-to-warehouse')?.addEventListener('click', () => {
+    history.pushState({ tier: 'warehouse' }, '', '');
+    if (!screens.warehouse) screens.warehouse = document.getElementById('warehouse-modal');
+    screens.warehouse.classList.remove('hidden');
+    loadWarehouseData('good');
+});
+
+// 選單：一鍵刪除對話
+document.getElementById('btn-clear-chat')?.addEventListener('click', async () => {
+    const confirmed = await showConfirmMessage("確定要刪除此局所有對話紀錄嗎？\n(操作不可復原)", "確定刪除", "取消");
+    if(confirmed && currentPKContext.docId) {
+        try {
+            const docRef = doc(db, currentPKContext.collection, currentPKContext.docId);
+            await updateDoc(docRef, { chatLogs: [] });
+            currentPKContext.chatLogs = [];
+            document.getElementById('chat-history').innerHTML = '';
+            showSystemMessage("對話紀錄已清空");
+        } catch(e) { console.error(e); }
+    }
+});
 
 
 // --- 5. 變數與 DOM 抓取 (介面產生後才能抓) ---
@@ -926,6 +966,7 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
        - **如果掃描完整份清單，沒有任何一張能「正面擊倒」鳥事，請不要放棄。**
        - 請重新檢視清單，發揮你的聯想力，挑選一張最有可能透過**「幽默感」、「反諷」或「意想不到的哲學角度」**來翻轉局勢的卡片。
        - 告訴自己：**沒有無用的好事，只有沒被發現的連結。** 請務必選出一張。
+       - **嚴格禁令**：絕對不允許回答「找不到」、「AI_FAILED」或任何拒絕選牌的內容。哪怕看起來關聯性極低，你也必須運用你的創意與神學/哲學智慧找出那個連結。
 
     【輸出規定】
     請「只回傳」該卡片的 ID (純字串)，不要有任何解釋、標點符號、Markdown 或額外文字。
@@ -1047,7 +1088,7 @@ async function startPK(data, collectionSource, options = {}) {
         const floatArea = document.getElementById('pk-floating-area');
         floatArea.innerHTML = ''; // 清空
 
-        const btnStyle = "display:block; margin:5px auto; padding:10px 24px; background:var(--primary); color:#FFF; border:none; border-radius:50px; font-weight:bold; font-size:14px; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.2); pointer-events: auto;";
+        const btnStyle = "display:block; margin:5px auto; padding:8px 20px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 12px rgba(251,192,45,0.15); pointer-events: auto;";
 
         const btnDraw = document.createElement('button');
         btnDraw.innerText = "抽好事卡";
@@ -2145,7 +2186,7 @@ async function handlePKResult(winner) {
         const floatArea = document.getElementById('pk-floating-area');
         floatArea.innerHTML = ''; 
 
-        const btnStyle = "display:block; margin:5px auto; padding:10px 24px; background:var(--primary); color:#FFF; border:none; border-radius:50px; font-weight:bold; font-size:14px; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.2); pointer-events: auto;";
+        const btnStyle = "display:block; margin:5px auto; padding:8px 20px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 12px rgba(251,192,45,0.15); pointer-events: auto;";
 
         const btnDraw = document.createElement('button');
         btnDraw.innerText = "抽好事卡";
