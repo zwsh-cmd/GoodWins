@@ -414,20 +414,17 @@ function createPKScreenHTML() {
                              addChatMessage('system', "────── 重新開始戰局 ──────", true);
                              addChatMessage('system', "正在重新調度好事資源...", false);
                              
-                             // 2. 重新抽卡 (排除目前這張 + 本局所有出現過的 + 歷史勝利的)
+                             // 2. [核心修正] 重啟戰場：歸零黑名單，全牌庫開放
+                             currentPKContext.shownGoodCardIds = []; 
                              const docs = querySnapshot.docs;
                              
-                             // [核心修正] 把目前這張好事的 ID 加入「已展示清單」
-                             if (currentPKContext.good?.id) {
-                                 currentPKContext.shownGoodCardIds.push(currentPKContext.good.id);
-                             }
-
-                             // 合併「歷史標題」與「本局 ID」作為總排除名單
-                             const fullExcludes = [...(currentPKContext.excludeTitles || []), ...currentPKContext.shownGoodCardIds];
-                             
-                             const newGood = await aiPickBestCard(currentPKContext.bad, docs, fullExcludes);
+                             const newGood = await aiPickBestCard(currentPKContext.bad, docs, currentPKContext.shownGoodCardIds);
                              
                              if (newGood) {
+                                 // 選中後，記得把這張新卡加入黑名單 (為後續可能發生的「戰中換牌」做準備)
+                                 if (newGood.id) {
+                                     currentPKContext.shownGoodCardIds.push(newGood.id);
+                                 }
                                  currentPKContext.good = newGood;
                                  document.getElementById('pk-good-title').innerText = newGood.title;
                                  document.getElementById('pk-good-content').innerText = newGood.content;
@@ -862,56 +859,33 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     // 1. 轉陣列
     const excludes = Array.isArray(excludeList) ? excludeList : (excludeList ? [excludeList] : []);
 
-    // 2. 嚴格過濾：同時檢查 ID 與 Title (支援歷史標題排除 + 本局ID排除)
+    // 2. 嚴格過濾：同時檢查 ID 與 Title (只排除傳入的黑名單)
     const availableDocs = candidateDocs.filter(doc => {
         const data = doc.data();
         const isExcludedById = excludes.includes(doc.id);
+        // 如果有傳入 Title 排除需求才檢查，預設主要依賴 ID
         const isExcludedByTitle = excludes.includes(data.title);
         return !isExcludedById && !isExcludedByTitle;
     });
 
-    // [核心修正] 移除「回傳 null」的檢查。
-    // 我們相信資料庫一定有牌，就算篩選完數量少，也要盡力去選。
+    if (availableDocs.length === 0) return null;
 
-    // 3. 階級擴展搜尋 (滾雪球策略)
-    // 規則：先鎖定「分數 <= 鳥事分數」的卡片
-    // 如果數量不滿 10 張，就將搜尋上限 +1，直到湊滿 10 張或封頂 (Lv.5)
-    
-    const badScore = parseInt(badData.score) || 1;
-    let searchMaxScore = badScore; // 起始點：包含所有「小於」與「等於」的牌
-    let finalCandidates = [];
+    // 3. 全量餵食 + 強制排序 (Lv.1 -> Lv.5)
+    // 讓 AI 依照 Prompt 指令從低分開始掃描
+    availableDocs.sort((a, b) => {
+        const scoreA = parseInt(a.data().score) || 1;
+        const scoreB = parseInt(b.data().score) || 1;
+        return scoreA - scoreB;
+    });
 
-    console.log(`[選牌] 鳥事等級 Lv.${badScore}，開始階級搜尋 (目標: 湊滿10張)...`);
-
-    while (searchMaxScore <= 5) {
-        // 篩選：等級 <= 目前搜尋上限 的卡片 (這樣就包含了更低階的牌)
-        const pool = availableDocs.filter(doc => {
-            const s = parseInt(doc.data().score) || 1;
-            return s <= searchMaxScore;
-        });
-
-        // [關鍵修正] 如果找到的牌 >= 10 張，或者已經擴大到最高等級 (Lv.5)，就停止擴大
-        if (pool.length >= 10 || searchMaxScore === 5) {
-            finalCandidates = pool;
-            console.log(`[選牌] 鎖定範圍 Lv.1 ~ Lv.${searchMaxScore}，共 ${pool.length} 張候選牌`);
-            break;
-        } else {
-            console.log(`[選牌] 範圍 Lv.1 ~ Lv.${searchMaxScore} 只有 ${pool.length} 張，不夠 10 張，擴大搜尋至 Lv.${searchMaxScore + 1}...`);
-            searchMaxScore++;
-        }
-    }
-
-    // 雙重保險：如果經過篩選還是空的 (雖然使用者說不可能)，為了程式不報錯，使用所有可用牌
-    if (finalCandidates.length === 0) {
-        finalCandidates = availableDocs;
-    }
+    const finalCandidates = availableDocs; // 不切片，全給
 
     // 製作給 AI 看的清單
     const aiInputCandidates = finalCandidates.map(doc => ({
         id: doc.id,
         title: doc.data().title,
         score: doc.data().score || 1,
-        content: (doc.data().content || "").substring(0, 50) + "..."
+        content: (doc.data().content || "").substring(0, 100) // 內容稍微給多一點讓 AI 判斷創意
     }));
 
     const selectionPrompt = `
@@ -923,15 +897,19 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     等級(Score)：${badData.score || 1}
 
     【候選好事卡清單】
+    (注意：此清單已嚴格依照「好事等級」由低到高 (Lv.1 -> Lv.5) 排序。)
     ${JSON.stringify(aiInputCandidates)}
 
     【選牌最高指導原則】
-    1. **絕對不重複**：清單中已經完全移除了本局對話出現過的所有卡片。
-    2. **優先策略 - 以柔克剛**：
-       - 若有「好事等級 <= 鳥事等級」的卡片，優先評估。微小的善意若能擊潰巨大的惡意，最有力量。
-    3. **必要策略 - 創意切入 (Creative Angle)**：
-       - **如果候選清單中沒有一張看起來「完美對應」或「等級夠高」的牌，請不要放棄。**
-       - 這是使用者僅有的籌碼。請發揮你的聯想力，從中挑選一張最有可能透過**「意想不到的角度」**或**「幽默感」**來翻轉局勢的卡片。
+    1. **絕對不重複**：清單中已經完全移除了本局對話出現過的所有卡片。(系統自動過濾)
+    2. **優先策略 - 以柔克剛 (Strict Scanning)**：
+       - 請務必從清單的**第一張 (低分卡)** 開始往下逐一檢視。
+       - 問自己：「這張微小的好事，在邏輯或情感上能否抵銷這件鳥事？」
+       - 若答案為 **YES**，請**立即選定**該卡片。(我們希望能用最小的代價贏得勝利)
+       - 若為 NO，才繼續檢查下一張。
+    3. **必要策略 - 創意切入 (Creative Fallback)**：
+       - **如果掃描完整份清單，沒有任何一張能「正面擊倒」鳥事，請不要放棄。**
+       - 請重新檢視清單，發揮你的聯想力，挑選一張最有可能透過**「幽默感」、「反諷」或「意想不到的哲學角度」**來翻轉局勢的卡片。
        - 告訴自己：**沒有無用的好事，只有沒被發現的連結。** 請務必選出一張。
 
     【輸出規定】
@@ -958,7 +936,6 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
 
             const selectedId = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
             if (selectedId) {
-                // 從過濾後的清單中找回完整物件
                 const bestDoc = finalCandidates.find(doc => doc.id === selectedId);
                 return bestDoc ? { id: bestDoc.id, ...bestDoc.data() } : null;
             }
@@ -1047,12 +1024,9 @@ async function startPK(data, collectionSource, options = {}) {
         document.getElementById('pk-good-content').innerText = "正在從資料庫挑選最佳策略...";
         
         try {
-            // [修改] 1. 讀取好事庫(1000) & 勝利紀錄擴大到 10 筆 (滿足使用者需求)
-            const p1 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000)));
-            const p2 = getDocs(query(collection(db, "pk_wins"), orderBy("createdAt", "desc"), limit(10)));
+            // [修改] 只讀取好事庫，不再讀取 pk_wins (解除歷史封印)
+            const querySnapshot = await getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000)));
             
-            const [querySnapshot, winsSnapshot] = await Promise.all([p1, p2]);
-
             if (!querySnapshot.empty) {
                 const docs = querySnapshot.docs;
                 let selectedGoodThing = null;
@@ -1063,22 +1037,14 @@ async function startPK(data, collectionSource, options = {}) {
                 loadingMsg.style.cssText = "text-align:center; font-size:12px; color:#999; margin:10px 0;";
                 chatHistory.appendChild(loadingMsg);
 
-                // [修改] 建立排除清單：10次勝利標題 + 選項排除標題
-                // 這些是「歷史排除」
-                currentPKContext.excludeTitles = winsSnapshot.docs.map(d => d.data().goodTitle);
-                
-                const optionExclude = options.excludeGoodTitle || data.goodTitle;
-                if (optionExclude) currentPKContext.excludeTitles.push(optionExclude);
-                
-                // 呼叫選牌：傳入歷史排除清單
-                selectedGoodThing = await aiPickBestCard(data, docs, currentPKContext.excludeTitles);
+                // [修改] 呼叫選牌：傳入目前為空的黑名單 (新局不排除歷史)
+                selectedGoodThing = await aiPickBestCard(data, docs, currentPKContext.shownGoodCardIds);
 
                 if (selectedGoodThing === "AI_FAILED") {
                     const loadingEl = document.getElementById('ai-selecting-msg');
                     if(loadingEl) loadingEl.remove();
                     document.getElementById('pk-good-title').innerText = "連線失敗";
                     document.getElementById('pk-good-content').innerText = "請檢查網路或稍後再試";
-                    // 即使失敗也要寫入紀錄
                     addChatMessage('system', "找不到適合的AI模型，請稍後再試一次。", true);
                     return; 
                 }
@@ -1090,7 +1056,8 @@ async function startPK(data, collectionSource, options = {}) {
                     return;
                 }
                 
-                // [核心修正] 記錄這張被選中的好事 ID
+                // [核心修正] 第一張抽到的卡，立即加入黑名單
+                // (預防等一下如果鳥事贏了要換牌，這張不能再出現)
                 if (selectedGoodThing.id) {
                     currentPKContext.shownGoodCardIds.push(selectedGoodThing.id);
                 }
@@ -2214,29 +2181,32 @@ async function handlePKResult(winner) {
     }
 
     if (winner === 'bad') {
-        // --- 使用者選了鳥事 ---
+        // --- 使用者選了鳥事 (戰中換牌) ---
         addChatMessage('user', "還是覺得這件鳥事比較強... 😩", true);
         addChatMessage('system', "收到。價值鑑定師正在重新擬定策略...", true);
 
         try {
-            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(30));
+            // [核心修正] 擴大讀取 limit(1000)
+            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000));
             const querySnapshot = await getDocs(q);
             
             if (!querySnapshot.empty) {
-                const candidates = querySnapshot.docs.filter(doc => doc.data().title !== currentPKContext.good?.title);
-                
-                if (candidates.length > 0) {
-                    let newGood = await aiPickBestCard(currentPKContext.bad, candidates);
-                    if (!newGood) {
-                         const randomDoc = candidates[Math.floor(Math.random() * candidates.length)];
-                         newGood = randomDoc.data();
-                    }
+                // 1. 累積黑名單：把剛輸掉的這張卡加入黑名單
+                if (currentPKContext.good?.id) {
+                    currentPKContext.shownGoodCardIds.push(currentPKContext.good.id);
+                }
+
+                // 2. 呼叫選牌：傳入累積後的黑名單
+                let newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
+
+                if (newGood && newGood !== "AI_FAILED") {
+                    // 選中後，加入黑名單
+                    if (newGood.id) currentPKContext.shownGoodCardIds.push(newGood.id);
 
                     currentPKContext.good = newGood;
                     
                     document.getElementById('pk-good-title').innerText = newGood.title;
                     document.getElementById('pk-good-content').innerText = newGood.content;
-                    // [新增] 顯示好事等級
                     document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
                     
                     const prompt = `【系統指令：使用者判定鳥事勝出（鳥事太強）。系統已重新選出一張新的好事卡（如上數據）。請執行模式三：針對這張新卡片，給出全新的比較觀點，嘗試再次說服使用者。】`;
