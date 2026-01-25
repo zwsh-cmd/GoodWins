@@ -1151,63 +1151,16 @@ async function addChatMessage(sender, text, saveToDb = true, modelName = null) {
 }
 
 // 3. 呼叫 Gemini API (包含對話記憶與完整 Prompt 邏輯)
-// [修改] 取得「模型天梯榜」：回傳一個排序好的陣列，而非單一模型
 async function getSortedModelList(apiKey) {
-    try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-        const data = await response.json();
-
-        if (!data.models) return [];
-
-        let models = data.models.filter(m => 
-            m.name.includes('gemini') && 
-            m.supportedGenerationMethods.includes('generateContent')
-        );
-
-        // ★★★ 天梯排序邏輯 (參考 api.js) ★★★
-        // 規則：版本越新越好 (3.0 > 2.0)，同版本 Pro/Ultra > Flash
-        models.sort((a, b) => {
-            const nameA = a.name.toLowerCase();
-            const nameB = b.name.toLowerCase();
-
-            // 1. 解析版本號 (3.0, 2.0, 1.5...)
-            const getVer = (n) => {
-                const match = n.match(/gemini-(\d+(\.\d+)?)/);
-                return match ? parseFloat(match[1]) : 0;
-            };
-            const verA = getVer(nameA);
-            const verB = getVer(nameB);
-
-            // 2. 版本先決：大的排前面
-            if (verA !== verB) return verB - verA;
-
-            // 3. 同版本比強度：Ultra/Pro > Flash > Nano
-            const getScore = (n) => {
-                if (n.includes('ultra')) return 10;
-                if (n.includes('pro')) return 8;
-                if (n.includes('flash')) return 5;
-                if (n.includes('nano')) return 1;
-                return 0; // 其他 experimental
-            };
-            return getScore(nameB) - getScore(nameA);
-        });
-
-        // 回傳乾淨的物件列表
-        const result = models.map(m => {
-            const cleanName = m.name.replace('models/', '');
-            return {
-                id: cleanName,
-                displayName: cleanName // 之後可以做更漂亮的格式化
-            };
-        });
-        
-        console.log("模型天梯 (強->弱):", result.map(m => m.id));
-        return result;
-
-    } catch (e) {
-        console.warn("無法取得模型列表，使用保底方案");
-        return [{ id: 'gemini-1.5-flash', displayName: 'gemini-1.5-flash (Fallback)' }];
-    }
+    // [修正] 根據監控紀錄，自動取得模型清單會包含大量 Limit: 0 的地雷模型。
+    // 現在改為鎖定 2.5 與 1.5 系列中，免費用戶確定有額度的穩定模型，避免瞬間連發 API 造成 429。
+    console.log("系統設定：鎖定 2.5 與 1.5 穩定版路徑");
+    
+    return [
+        { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' },
+        { id: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash-Lite' },
+        { id: 'gemini-1.5-flash', displayName: 'Gemini 1.5 Flash (最穩定)' }
+    ];
 }
 
 // isHidden 參數用來發送「系統指令」給 AI，但不顯示在聊天室窗中
