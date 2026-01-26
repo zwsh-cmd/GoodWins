@@ -44,29 +44,30 @@ function createEditorHTML() {
 
     // [修改] 1. placeholder 顏色改為 #E0E0E0 (更淺)
     // [修改] 2. select option 字體同步調整為 17px
+    // [修正] 版面分離：標題列固定，內容區獨立捲動，避免輸入時畫面跳動
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
-        <div style="flex:1; display:flex; flex-direction:column; padding:24px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
-                <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
-                <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
-            </div>
+        <div style="padding: 15px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #F0F0F0; background: #FFF; flex-shrink: 0;">
+            <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
+            <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
+            <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
+        </div>
 
-            <style>
-                #input-title::placeholder, #input-content::placeholder { color: #E0E0E0; opacity: 1; }
-                select option { font-size: 17px; }
-            </style>
+        <style>
+            #input-title::placeholder, #input-content::placeholder { color: #E0E0E0; opacity: 1; }
+            select option { font-size: 17px; }
+        </style>
 
+        <div style="flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column;">
             <input id="input-title" type="text" placeholder="標題" autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:#666; margin-bottom:10px;">
             
-            <textarea id="input-content" placeholder="內容" name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
+            <textarea id="input-content" placeholder="內容" name="gw-content-field" style="width:100%; min-height:150px; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
             
             <div style="padding:10px 0; display:flex; justify-content:flex-end;">
                 <button id="btn-start-pk" style="display:none; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; padding:6px 20px; border-radius:50px; font-weight:700; font-size:14px; cursor:pointer;">開始PK</button>
             </div>
 
-            <div style="padding:10px 0 20px 0;">
+            <div style="padding:10px 0 40px 0;">
                 <div style="margin-bottom:15px;">
                     <label id="label-score" style="font-size:15px; color:#999; display:block; margin-bottom:8px; font-weight:bold;">好事等級</label>
                     <select id="input-score" style="${selectStyle}">
@@ -272,9 +273,9 @@ function createPKScreenHTML() {
                 
                 <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; padding-right: 15px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
-                <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF; z-index: 25;">
-                    <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px;">
-                    <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <div style="padding: 10px 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF; z-index: 25; align-items: flex-end;">
+                    <textarea id="chat-input" rows="1" placeholder="跟 AI 討論..." style="flex: 1; padding: 10px 15px; border: 1px solid #EEE; border-radius: 20px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px; resize: none; overflow-y: auto; line-height: 1.5; max-height: 100px;"></textarea>
+                    <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-bottom: 2px;">
                         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
                 </div>
@@ -366,13 +367,24 @@ function createPKScreenHTML() {
             if (!text) return;
             await addChatMessage('user', text);
             inputChat.value = '';
+            inputChat.style.height = 'auto'; // [修正] 發送後重置高度
             await callGeminiChat(text);
         };
 
         if(btnSend) btnSend.addEventListener('click', handleSend);
         if(inputChat) {
+            // [新增] 自動調整高度 (最多約 5 行，由 max-height CSS 控制)
+            inputChat.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+            
+            // [修正] Enter 發送 (防止換行)，若需換行可按 Shift+Enter (雖然手機鍵盤通常直接換行，此處維持 Enter 發送習慣)
             inputChat.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') handleSend();
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault(); 
+                    handleSend();
+                }
             });
         }
 
