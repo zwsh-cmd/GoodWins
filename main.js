@@ -867,30 +867,59 @@ async function handleSaveContent(shouldStartPK = false) {
 
         screens.editor.classList.add('hidden'); 
 
-        // [核心修改] 邏輯分流
-        if (shouldStartPK) {
-            // [修正] 必須傳入 ID 與 Collection 名稱，這樣「離開」時才能正確重置狀態
-            startPK({ 
-                id: targetId, 
-                title, 
-                content,
-                score,
-                source,
-                chatLogs: []
-            }, collectionName); 
-        } else {
-            // [修正導航] 僅儲存時，執行「上一頁」回到倉庫，避免歷史紀錄卡在編輯器狀態
-            history.back();
+        // [核心修改] 邏輯分流與導航優化
+        
+        // 情況 A：如果是「鳥事」 (Bad Thing)
+        // 目標：建立 [首頁] -> [倉庫] -> (可選 [PK]) 的路徑，取代原本的 [首頁] -> [編輯器]
+        if (currentMode === 'bad') {
+            
+            // 1. 偷天換日：把當前的「編輯器」歷史紀錄替換成「倉庫」
+            history.replaceState({ tier: 'warehouse' }, '', '');
+            
+            // 2. 視覺切換：關閉編輯器，開啟倉庫
+            if (!screens.warehouse) screens.warehouse = document.getElementById('warehouse-modal');
+            screens.warehouse.classList.remove('hidden');
+            screens.editor.classList.add('hidden'); // 確保編輯器隱藏
+            
+            // 3. 載入資料：確保使用者看到剛剛新增的鳥事
+            loadWarehouseData('bad');
 
-            if (currentMode === 'good') {
-                showSystemMessage("✨ 好事已儲存！");
+            // 4. 分流處理
+            if (shouldStartPK) {
+                // 如果要 PK，會在目前的 [首頁] -> [倉庫] 之上，再 Push 一層 [PK]
+                // 這樣「離開」時就會自然回到 [倉庫]
+                startPK({ 
+                    id: targetId, 
+                    title, 
+                    content,
+                    score,
+                    source,
+                    chatLogs: []
+                }, collectionName); 
             } else {
+                // 如果只是儲存，就停留在 [倉庫]
+                // 這樣按「返回」時，就會回到 [首頁]
                 showSystemMessage("鳥事已儲存！");
             }
-        }
+        } 
         
-        if (!screens.warehouse.classList.contains('hidden')) {
-            loadWarehouseData(currentMode);
+        // 情況 B：如果是「好事」 (Good Thing)
+        // 目標：維持原本邏輯，儲存後回到上一頁 (可能是首頁，也可能是從倉庫進來的)
+        else {
+            if (shouldStartPK) {
+                // 好事理論上不觸發 PK，但保留邏輯防呆
+                startPK({ id: targetId, title, content, score, source, chatLogs: [] }, collectionName);
+            } else {
+                history.back(); // 回到上一層
+                showSystemMessage("✨ 好事已儲存！");
+                
+                // 如果上一層剛好是倉庫，重新整理一下讓新資料出現
+                setTimeout(() => {
+                    if (screens.warehouse && !screens.warehouse.classList.contains('hidden')) {
+                        loadWarehouseData(currentMode);
+                    }
+                }, 100);
+            }
         }
 
     } catch (e) {
