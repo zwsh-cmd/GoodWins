@@ -940,7 +940,8 @@ let currentPKContext = { bad: null, good: null };
 
 // --- PK 核心邏輯 (保存對話版) ---
 
-// [修正] AI 智慧選牌模組：嚴格「小於等於」起手 + 湊滿10張 + 創意切入 + 無保底
+// [修正] AI 智慧選牌模組：全域審視 (Global Evaluation)
+// 目的：要求 AI 閱讀完整份清單，綜合評估「有效性」與「分數成本」後做出最佳決策，但保留原始 Prompt 靈魂。
 async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey || candidateDocs.length === 0) return null;
@@ -952,31 +953,32 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
     const availableDocs = candidateDocs.filter(doc => {
         const data = doc.data();
         const isExcludedById = excludes.includes(doc.id);
-        // 如果有傳入 Title 排除需求才檢查，預設主要依賴 ID
         const isExcludedByTitle = excludes.includes(data.title);
         return !isExcludedById && !isExcludedByTitle;
     });
 
     if (availableDocs.length === 0) return null;
 
-    // 3. 全量餵食 + 強制排序 (Lv.1 -> Lv.5)
-    // 讓 AI 依照 Prompt 指令從低分開始掃描
+    // 3. 排序：依照分數由低到高 (Lv.1 -> Lv.5)
+    // 雖然我們要 AI 看全部，但有序的清單有助於 AI 理解「成本結構」，保留「以小搏大」的參考依據。
     availableDocs.sort((a, b) => {
         const scoreA = parseInt(a.data().score) || 1;
         const scoreB = parseInt(b.data().score) || 1;
         return scoreA - scoreB;
     });
 
-    const finalCandidates = availableDocs; // 不切片，全給
+    // [修正] 限制數量：取前 50 張 (包含所有低分卡與部分高分卡)，避免全域掃描時 Token 超過限制
+    const finalCandidates = availableDocs.slice(0, 50);
 
-    // 製作給 AI 看的清單
+    // 製作給 AI 看的資料 (保留原始結構)
     const aiInputCandidates = finalCandidates.map(doc => ({
         id: doc.id,
         title: doc.data().title,
         score: doc.data().score || 1,
-        content: (doc.data().content || "").substring(0, 100) // 內容稍微給多一點讓 AI 判斷創意
+        content: (doc.data().content || "").substring(0, 100) 
     }));
 
+    // [核心修改] Prompt：將「循序掃描」改為「全域審視」，並將高分卡門檻放寬至 Lv.3-5
     const selectionPrompt = `
     任務：你是「GoodWins」APP 的後台決策大腦。請從下列【候選好事卡清單】中，挑選唯一一張最能破解【眼前鳥事】的卡片。
 
@@ -991,11 +993,10 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
 
     【選牌最高指導原則】
     1. **絕對不重複**：清單中已經完全移除了本局對話出現過的所有卡片。(系統自動過濾)
-    2. **優先策略 - 以柔克剛 (Strict Scanning)**：
-       - 請務必從清單的**第一張 (低分卡)** 開始往下逐一檢視。
-       - 問自己：「這張微小的好事，在邏輯或情感上能否抵銷這件鳥事？」
-       - 若答案為 **YES**，請**立即選定**該卡片。(我們希望能用最小的代價贏得勝利)
-       - 若為 NO，才繼續檢查下一張。
+    2. **優先策略 - 全域審視 (Global Evaluation)**：
+       - 請務必掃描整份清單，**不要只看前面**。
+       - **尋找最佳性價比**：請在心中比較所有選項。如果一張「低分卡」(Lv.1-2) 就能透過幽默或轉念有效化解鳥事，請優先選擇它（以柔克剛）。
+       - **但絕不勉強**：如果低分卡太牽強，而有一張「高分卡」(Lv.3-5) 能帶來完美的治癒或反擊，請選擇高分卡。不要為了省分而犧牲品質。
     3. **必要策略 - 創意切入 (Creative Fallback)**：
        - **如果掃描完整份清單，沒有任何一張能「正面擊倒」鳥事，請不要放棄。**
        - 請重新檢視清單，發揮你的聯想力，挑選一張最有可能透過**「幽默感」、「反諷」或「意想不到的哲學角度」**來翻轉局勢的卡片。
@@ -1008,19 +1009,23 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
 
     const modelList = await getSortedModelList(apiKey);
     
+    // [設定] Temperature 設為 0.4
+    // 稍微調高創意值，讓 AI 在面對相同清單時，能根據對「最佳」的些微不同解讀而有變化 (避免每次都選同一張)
+    const temperature = 0.4;
+
     for (const model of modelList) {
         try {
             // --- 監控：紀錄選牌 API 發送 ---
             window.apiCallCount++;
             console.warn(`[監控] 準備發送 API (選牌)！目前累積發送 ${window.apiCallCount} 次`);
-
             console.log(`[選牌] 嘗試使用：${model.id}`);
+
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ role: 'user', parts: [{ text: selectionPrompt }] }],
-                    generationConfig: { temperature: 0.1 } 
+                    generationConfig: { temperature: temperature } 
                 })
             });
 
@@ -1038,7 +1043,6 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
         }
     }
 
-    // [最終修正] AI 必須負責運用創意選牌。不准報錯。
     console.warn("AI 正在深度發想創意連結...");
     return null;
 }
