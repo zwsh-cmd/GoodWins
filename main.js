@@ -1091,6 +1091,11 @@ async function startPK(data, collectionSource, options = {}) {
         document.getElementById('pk-good-content').innerText = "請召喚好事卡來破解這件鳥事。";
         document.getElementById('pk-good-header').innerText = "好事";
 
+        // [新增] 按鈕出現時，先在對話紀錄插入分隔線 (若有舊紀錄)
+        if (currentPKContext.chatLogs.length > 0) {
+            addChatMessage('system', "────── 重新開始戰局 ──────", true);
+        }
+
         const floatArea = document.getElementById('pk-floating-area');
         floatArea.innerHTML = ''; // 清空
 
@@ -1125,8 +1130,8 @@ async function startPK(data, collectionSource, options = {}) {
                     btnChat.onclick = async () => {
                         btnChat.disabled = true;
                         btnChat.innerText = "思考中...";
+                        // [修正] 分隔線已在按鈕出現時顯示，此處移除重複代碼
                         if (currentPKContext.chatLogs.length > 0) {
-                            await addChatMessage('system', "────── 重新開始戰局 ──────", true);
                             await callGeminiChat(`【系統指令：忽略舊結果。新好事卡為（${selectedGoodThing.title}）。請開始價值辯論。】`, true);
                         } else {
                             await callGeminiChat("【系統指令：PK 開始。策略選牌完成，進行價值辯論。】", true);
@@ -1263,6 +1268,7 @@ ${goodText}
 	   - **價值對比**：解釋為什麼這件好事的「質感」或「對心靈的滋養」，足以抵銷或平衡那件鳥事的消耗。
 	   - **以柔克剛**：如果好事卡等級較低，請強調為什麼這張好事卡實際價值高於鳥事卡。
 	   - **扭轉局面**：必須切題，不是一味地要使用者看到光明面，要試著去說服使用者「這件好事」跟「鳥事」之間有什麼關聯性、為何這件好事可以扭轉局面抵銷鳥事帶來的負面影響。
+	   - **切合問題面向**：舉例，自動判斷使用者問題的面向，若是基督信仰問題，就從基督信仰觀點回答。以此類推。
 
 模式二：自然對話（當使用者回應後啟動）
 	1. **延續討論**：針對使用者的反饋進行理性的交流。
@@ -1292,62 +1298,92 @@ ${goodText}
             if(el) el.innerText = msg;
         };
 
-        while (!success) {
+        // [修正] 移除 while 迴圈與自動重試，改為單次掃描並詳列錯誤資訊
+        if (signal.aborted) throw new Error("AbortError");
+
+        for (const model of modelList) {
             if (signal.aborted) throw new Error("AbortError");
 
-            for (const model of modelList) {
-                if (signal.aborted) throw new Error("AbortError");
+            try {
+                // --- 監控：紀錄聊天 API 發送 ---
+                window.apiCallCount++;
+                console.warn(`[監控] 準備發送 API (對話)！目前累積發送 ${window.apiCallCount} 次`);
 
-                try {
-                    // --- 監控：紀錄聊天 API 發送 ---
-                    window.apiCallCount++;
-                    console.warn(`[監控] 準備發送 API (對話)！目前累積發送 ${window.apiCallCount} 次`);
+                console.log(`[聊天] 嘗試連線模型: ${model.id} ...`);
+                updateLoadingMsg(`嘗試連線 AI 模型 (${model.id})...`);
+                
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: signal, 
+                    body: JSON.stringify({
+                        contents: contents, 
+                        systemInstruction: { parts: [{ text: systemInstruction }] },
+                        generationConfig: { maxOutputTokens: 2500, temperature: 0.7 }
+                    })
+                });
 
-                    console.log(`[聊天] 嘗試連線模型: ${model.id} ...`);
-                    // [新增] 介面顯示當前嘗試的模型
-                    updateLoadingMsg(`嘗試連線 AI 模型 (${model.id})...`);
+                const data = await response.json();
+
+                if (data.error) throw new Error(`${data.error.code} - ${data.error.message}`);
+                
+                if (data.candidates && data.candidates[0].content) {
+                    const aiText = data.candidates[0].content.parts[0].text;
                     
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        signal: signal, 
-                        body: JSON.stringify({
-                            contents: contents, 
-                            systemInstruction: { parts: [{ text: systemInstruction }] },
-                            generationConfig: { maxOutputTokens: 2500, temperature: 0.7 }
-                        })
-                    });
+                    const loadingEl = document.getElementById(loadingId);
+                    if(loadingEl) loadingEl.remove();
 
-                    const data = await response.json();
-
-                    if (data.error) throw new Error(`${data.error.code} - ${data.error.message}`);
-                    
-                    if (data.candidates && data.candidates[0].content) {
-                        const aiText = data.candidates[0].content.parts[0].text;
-                        
-                        const loadingEl = document.getElementById(loadingId);
-                        if(loadingEl) loadingEl.remove();
-
-                        addChatMessage('ai', aiText, true, model.displayName);
-                        success = true; 
-                        break; 
-                    } else {
-                        throw new Error("EMPTY_RESPONSE");
-                    }
-
-                } catch (err) {
-                    if (err.name === 'AbortError' || err.message === 'AbortError') throw err;
-                    console.warn(`[聊天] 模型 ${model.id} 失敗 (${err.message})`);
-                    // [新增] 介面顯示失敗與切換
-                    updateLoadingMsg(`模型 ${model.id} 忙碌中，切換下一條線路...`);
+                    addChatMessage('ai', aiText, true, model.displayName);
+                    success = true; 
+                    break; 
+                } else {
+                    throw new Error("EMPTY_RESPONSE");
                 }
-            }
 
-            if (success) break; 
-            
-            console.warn("所有模型皆忙碌，3秒後重新開始新一輪嘗試...");
-            updateLoadingMsg("所有線路忙碌，系統將於 3 秒後重試...");
-            await sleep(3000); 
+            } catch (err) {
+                if (err.name === 'AbortError' || err.message === 'AbortError') throw err;
+                
+                const errMsg = err.message || "";
+                console.warn(`[聊天] 模型 ${model.id} 失敗 (${errMsg})`);
+
+                // [修正] 增加詳細錯誤代碼判斷與即時中止邏輯
+                const errorMap = {
+                    "400": "請求內容錯誤 (400) - 請檢查對話長度或內容。",
+                    "401": "API Key 無效 (401) - 請檢查設定中的金鑰。",
+                    "403": "無權限 (403) - 您的 API Key 無法存取此模型。",
+                    "404": "模型未找到 (404) - Google 可能已移除此模型。",
+                    "429": "API 額度已滿 (429) - 請等待約 1-2 分鐘後再試。",
+                    "500": "Google 伺服器錯誤 (500) - 請稍後再試。",
+                    "503": "服務暫時無法使用 (503) - 伺服器過載。"
+                };
+
+                let friendlyMsg = null;
+                for (const [code, msg] of Object.entries(errorMap)) {
+                    if (errMsg.includes(code)) {
+                        friendlyMsg = msg;
+                        break;
+                    }
+                }
+
+                // 若遇到 429 (額度) 或 401 (金鑰)，通常換模型也無效，直接停止
+                if (friendlyMsg && (errMsg.includes("429") || errMsg.includes("401"))) {
+                    const loadingEl = document.getElementById(loadingId);
+                    if(loadingEl) loadingEl.remove();
+                    addChatMessage('system', `⛔ 連線停止：${friendlyMsg}`, true);
+                    success = true; // 設為 true 以阻止外部再拋出通用錯誤，我們已在此處理完畢
+                    break; // 停止迴圈，不再嘗試其他模型
+                }
+
+                updateLoadingMsg(`模型 ${model.id} 異常 (${errMsg})，嘗試下一條線路...`);
+            }
+        }
+
+        // 迴圈結束後，若仍未成功 (且未被上述錯誤代碼攔截處理)
+        if (!success) {
+            const loadingEl = document.getElementById(loadingId);
+            if(loadingEl) loadingEl.remove();
+            addChatMessage('system', "❌ 所有 AI 線路皆忙碌或無回應，請稍後再試。", true);
+            success = true; // 設為 true，避免進入下方的 catch(e) 通用錯誤區塊
         }
 
     } catch (e) {
