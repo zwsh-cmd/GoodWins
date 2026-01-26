@@ -63,7 +63,7 @@ function createEditorHTML() {
             <textarea id="input-content" placeholder="內容" name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
             
             <div style="padding:10px 0; display:flex; justify-content:flex-end;">
-                <button id="btn-start-pk" style="display:none; background:transparent; border:1px solid var(--primary); color:var(--primary); padding:6px 20px; border-radius:50px; font-weight:700; font-size:14px; cursor:pointer;">開始PK</button>
+                <button id="btn-start-pk" style="display:none; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; padding:6px 20px; border-radius:50px; font-weight:700; font-size:14px; cursor:pointer;">開始PK</button>
             </div>
 
             <div style="padding:10px 0 20px 0;">
@@ -270,7 +270,7 @@ function createPKScreenHTML() {
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
                 <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 40px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
-                <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
+                <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; padding-right: 15px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
                 <div style="padding: 15px; border-top: 1px solid #F0F0F0; display: flex; gap: 10px; background: #FFF; z-index: 25;">
                     <input id="chat-input" type="text" placeholder="跟 AI 討論..." style="flex: 1; padding: 12px 15px; border: 1px solid #EEE; border-radius: 25px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px;">
@@ -1122,7 +1122,7 @@ async function startPK(data, collectionSource, options = {}) {
 
         // [新增] 按鈕出現時，先在對話紀錄插入分隔線 (若有舊紀錄)
         if (currentPKContext.chatLogs.length > 0) {
-            addChatMessage('system', "────── 重新開始戰局 ──────", true);
+            addChatMessage('system', "────── 重新開啟戰局 ──────", true);
         }
 
         const floatArea = document.getElementById('pk-floating-area');
@@ -1161,6 +1161,7 @@ async function startPK(data, collectionSource, options = {}) {
                         btnChat.innerText = "思考中...";
                         // [修正] 分隔線已在按鈕出現時顯示，此處移除重複代碼
                         if (currentPKContext.chatLogs.length > 0) {
+                            await addChatMessage('system', "────── 重新開啟戰局 ──────", true);
                             await callGeminiChat(`【系統指令：忽略舊結果。新好事卡為（${selectedGoodThing.title}）。請開始價值辯論。】`, true);
                         } else {
                             await callGeminiChat("【系統指令：PK 開始。策略選牌完成，進行價值辯論。】", true);
@@ -1190,7 +1191,8 @@ async function addChatMessage(sender, text, saveToDb = true, modelName = null) {
         msgDiv.style.cssText = "align-self: flex-end; background: var(--primary); color: #FFF; padding: 12px 16px; border-radius: 16px 16px 4px 16px; font-size: 14px; line-height: 1.6; max-width: 85%; box-shadow: 0 2px 5px rgba(0,0,0,0.1);";
         msgDiv.innerText = text;
     } else { 
-        msgDiv.style.cssText = "align-self: center; padding: 8px; font-size: 12px; color: #BBB;";
+        // [修正] 強制寬度 100% 並文字置中，確保與浮動按鈕對齊
+        msgDiv.style.cssText = "align-self: center; width: 100%; text-align: center; padding: 8px; font-size: 12px; color: #BBB;";
         msgDiv.innerText = text;
     }
     
