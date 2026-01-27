@@ -650,22 +650,25 @@ function createSearchHTML() {
                     if (item.type === 'bad') {
                         color = 'var(--bad-icon)';
                         typeLabel = '鳥事';
-                        title = item.title;
-                        content = item.content;
+                        // [安全修正] 防止 XSS
+                        title = escapeHtml(item.title);
+                        content = escapeHtml(item.content);
                         // [修改] 改用圖示按鈕 (修改)
                         actionBtnHTML = `<button class="btn-search-action" data-action="edit" data-id="${item.id}" data-type="${item.type}" style="${btnStyle}" title="修改">${iconEdit}</button>`;
                     } else if (item.type === 'good') {
                         color = 'var(--good-icon)';
                         typeLabel = '好事';
-                        title = item.title;
-                        content = item.content;
+                        // [安全修正] 防止 XSS
+                        title = escapeHtml(item.title);
+                        content = escapeHtml(item.content);
                         // [修改] 改用圖示按鈕 (修改)
                         actionBtnHTML = `<button class="btn-search-action" data-action="edit" data-id="${item.id}" data-type="${item.type}" style="${btnStyle}" title="修改">${iconEdit}</button>`;
                     } else if (item.type === 'wins') {
                         color = '#E0C060';
                         typeLabel = 'PK勝利';
-                        title = `擊敗「${item.badTitle}」`;
-                        content = `戰友：${item.goodTitle}`;
+                        // [安全修正] 防止 XSS
+                        title = `擊敗「${escapeHtml(item.badTitle)}」`;
+                        content = `戰友：${escapeHtml(item.goodTitle)}`;
                         // [修改] 改用圖示按鈕 (回顧)
                         actionBtnHTML = `<button class="btn-search-action" data-action="review" data-id="${item.id}" style="${btnStyle}" title="回顧勝利">${iconReview}</button>`;
                     }
@@ -1514,6 +1517,16 @@ btns.saveKey.addEventListener('click', () => {
 });
 
 // --- 輔助函式 ---
+// [新增] XSS/顯示修復：將特殊符號轉義，避免 < > 導致內容消失或版面錯乱
+function escapeHtml(text) {
+    if (!text) return "";
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 function showScreen(name) {
     Object.values(screens).forEach(el => el && el.classList.add('hidden'));
     if (name === 'login') screens.login.classList.remove('hidden');
@@ -2218,8 +2231,9 @@ async function loadWarehouseData(type) {
             let iconColor = '#999';
             let labelText = '';
             let actionButtonsHTML = '';
-            let displayTitle = data.title;
-            let displayContent = data.content;
+            // [安全修正] 使用 escapeHtml 包覆，防止 XSS 與顯示錯誤
+            let displayTitle = escapeHtml(data.title);
+            let displayContent = escapeHtml(data.content);
             
             // [修正] 按鈕樣式：圓形按鈕縮小至 28px
             const iconEdit = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#888; stroke-width:2;" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
@@ -2270,8 +2284,9 @@ async function loadWarehouseData(type) {
                 iconColor = '#E0C060'; 
                 // [修正] 勝利卡顯示「取得積分」而非等級
                 labelText = `取得積分: ${data.score || 0}`;
-                displayTitle = `擊敗「${data.badTitle}」`;
-                displayContent = `戰友：${data.goodTitle}`;
+                // [修正] 使用 escapeHtml 包覆內層資料
+                displayTitle = `擊敗「${escapeHtml(data.badTitle)}」`;
+                displayContent = `戰友：${escapeHtml(data.goodTitle)}`;
 
                 // [修正] 回顧按鈕縮小
                 const reviewBtnStyle = `height:28px; padding:0 12px; border-radius:14px; border:none; cursor:pointer; font-weight:bold; font-size:12px; background:#FFF9C4; color:#FBC02D;`;
