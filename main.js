@@ -693,14 +693,16 @@ function createSearchHTML() {
         if (action === 'edit') {
             const collectionName = type === 'good' ? 'good_things' : 'bad_things';
             try {
-                const docSnap = await getDoc(doc(db, collectionName, id));
+                // [修正] 改用 getMyDoc
+                const docSnap = await getDoc(getMyDoc(collectionName, id));
                 if (docSnap.exists()) {
                     openEditor(type, { id: docSnap.id, ...docSnap.data() });
                 }
             } catch(e) { console.error(e); }
         } else if (action === 'review') {
             try {
-                const docSnap = await getDoc(doc(db, 'pk_wins', id));
+                // [修正] 改用 getMyDoc
+                const docSnap = await getDoc(getMyDoc('pk_wins', id));
                 if (docSnap.exists()) {
                     document.getElementById('search-modal').classList.add('hidden'); 
                     startPK({ id: docSnap.id, ...docSnap.data() }, 'pk_wins');
@@ -1191,7 +1193,8 @@ async function startPK(data, collectionSource, options = {}) {
             btnDraw.disabled = true;
             btnDraw.innerText = "挑選中...";
             try {
-                const querySnapshot = await getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000)));
+                // [修正] 改用 getMyCollection
+                const querySnapshot = await getDocs(query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(1000)));
                 if (!querySnapshot.empty) {
                     const selectedGoodThing = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
                     if (!selectedGoodThing || selectedGoodThing === "AI_FAILED") {
@@ -2013,14 +2016,16 @@ function createWarehouseHTML() {
                 if (!confirmed) return;
 
                 if (type === 'wins') {
-                     const winDoc = await getDoc(doc(db, 'pk_wins', id));
+                     // [修正] 改用 getMyDoc
+                     const winDoc = await getDoc(getMyDoc('pk_wins', id));
                      if (winDoc.exists()) {
                          const data = winDoc.data();
                          const winScore = data.score || 1;
                          await updateUserScore(-winScore);
 
                          if (data.originalBadId) {
-                             const badRef = doc(db, 'bad_things', data.originalBadId);
+                             // [修正] 改用 getMyDoc
+                             const badRef = getMyDoc('bad_things', data.originalBadId);
                              await updateDoc(badRef, {
                                  isDefeated: false,
                                  lastWinId: null,
@@ -2040,7 +2045,8 @@ function createWarehouseHTML() {
 
             } else if (action === 'edit') {
                 const collectionName = type === 'good' ? 'good_things' : 'bad_things';
-                const docSnap = await getDoc(doc(db, collectionName, id));
+                // [修正] 改用 getMyDoc
+                const docSnap = await getDoc(getMyDoc(collectionName, id));
                 if (docSnap.exists()) {
                     openEditor(type === 'good' ? 'good' : 'bad', { id: docSnap.id, ...docSnap.data() });
                 }
@@ -2048,23 +2054,22 @@ function createWarehouseHTML() {
                 document.getElementById('warehouse-modal').classList.add('hidden');
                 
                 if (winId) {
-                    // [修改] 再擊敗邏輯：讀取舊勝利以排除舊好事，並開啟新局
-                    const winSnap = await getDoc(doc(db, 'pk_wins', winId));
+                    // [修改] 再擊敗邏輯：使用 getMyDoc
+                    const winSnap = await getDoc(getMyDoc('pk_wins', winId));
                     let excludeTitle = null;
                     if (winSnap.exists()) {
                         excludeTitle = winSnap.data().goodTitle;
                     }
 
-                    const docSnap = await getDoc(doc(db, 'bad_things', id));
+                    // [修正] 改用 getMyDoc
+                    const docSnap = await getDoc(getMyDoc('bad_things', id));
                     if (docSnap.exists()) {
                         
-                        // [新增] 再擊敗也要先扣分 (視為尚未勝利)
                         if (winSnap.exists()) {
                             const oldScore = winSnap.data().score || 1;
                             await updateUserScore(-oldScore);
                         }
 
-                        // [修正] 補回 associatedWinId，讓系統知道這是哪張勝利紀錄，以便中途離開時刪除
                         startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things', { 
                             isReDefeat: true, 
                             excludeGoodTitle: excludeTitle,
@@ -2074,13 +2079,15 @@ function createWarehouseHTML() {
                     }
                 }
                 
-                const docSnap = await getDoc(doc(db, 'bad_things', id));
+                // [修正] 改用 getMyDoc
+                const docSnap = await getDoc(getMyDoc('bad_things', id));
                 if (docSnap.exists()) {
                     startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things');
                 }
 
             } else if (action === 'review') {
-                const docSnap = await getDoc(doc(db, 'pk_wins', id));
+                // [修正] 改用 getMyDoc
+                const docSnap = await getDoc(getMyDoc('pk_wins', id));
                 if (docSnap.exists()) {
                     document.getElementById('warehouse-modal').classList.add('hidden');
                     const winData = { id: docSnap.id, ...docSnap.data() };
