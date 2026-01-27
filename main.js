@@ -1,7 +1,7 @@
 // --- 1. 引入 Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 // --- 2. 設定碼 ---
 const firebaseConfig = {
@@ -585,9 +585,9 @@ function createSearchHTML() {
             resultList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">搜尋中...</div>';
             
             try {
-                const p1 = getDocs(query(collection(db, "bad_things"), orderBy("createdAt", "desc"), limit(30)));
-                const p2 = getDocs(query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(30)));
-                const p3 = getDocs(query(collection(db, "pk_wins"), orderBy("createdAt", "desc"), limit(30)));
+                const p1 = getDocs(query(collection(db, "bad_things"), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(30)));
+                const p2 = getDocs(query(collection(db, "good_things"), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(30)));
+                const p3 = getDocs(query(collection(db, "pk_wins"), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(30)));
                 
                 const [badSnap, goodSnap, winSnap] = await Promise.all([p1, p2, p3]);
 
@@ -2138,7 +2138,7 @@ async function loadWarehouseData(type) {
 
     try {
         // [策略修正] 1. 資料庫查詢：使用 createdAt 抓取
-        const q = query(collection(db, collectionName), orderBy("createdAt", "desc"), limit(100));
+        const q = query(collection(db, collectionName), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(100));
         const querySnapshot = await getDocs(q);
         
         listEl.innerHTML = ''; 
