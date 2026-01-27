@@ -1289,13 +1289,12 @@ async function addChatMessage(sender, text, saveToDb = true, modelName = null) {
 
 // 3. 呼叫 Gemini API (包含對話記憶與完整 Prompt 邏輯)
 async function getSortedModelList(apiKey) {
-    // [修正] 升級為 3.0 Flash。備援順位採用真實存在的 2.0 與 1.5 版本。
     // 順位機制主要用於應對個別模型的 RPM (每分鐘請求限制) 塞車問題，而非總額度耗盡。
-    console.log("系統設定：鎖定 3.0 -> 2.0 -> 1.5 穩定備援路徑");
+    console.log("系統設定：鎖定 2.5 -> 2.5 F -> 1.5 穩定備援路徑");
     
     return [
-        { id: 'gemini-3.0-flash', displayName: 'Gemini 3.0 Flash' },
         { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' },
+        { id: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash-Lite' },
         { id: 'gemini-1.5-flash', displayName: 'Gemini 1.5 Flash (最穩定)' }
     ];
 }
