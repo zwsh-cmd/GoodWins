@@ -2234,8 +2234,8 @@ async function loadWarehouseData(type) {
             }
             else { 
                 iconColor = '#E0C060'; 
-                // [修正] 勝利卡顯示等級
-                labelText = `等級: ${data.score || 1}`;
+                // [修正] 勝利卡顯示「取得積分」而非等級
+                labelText = `取得積分: ${data.score || 0}`;
                 displayTitle = `擊敗「${data.badTitle}」`;
                 displayContent = `戰友：${data.goodTitle}`;
 
@@ -2248,7 +2248,8 @@ async function loadWarehouseData(type) {
                 `;
             }
 
-            // [修改] 版面結構：標題/內容在一區，下方一列分為 左(等級) 右(按鈕)
+            // [修改] 版面結構：標題/內容在一區，下方一列分為 左(等級/積分) 右(按鈕)
+            // [修正] 加入 white-space: pre-wrap 讓好事庫與鳥事庫的內容可以正確分段顯示
             const cardHTML = `
                 <div class="card-item" style="background: ${cardBg}; padding: 15px; border-radius: 12px; border: 1px solid #F0F0F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; gap: 10px;">
                     <div style="width: 4px; background: ${iconColor}; border-radius: 2px;"></div>
@@ -2257,7 +2258,7 @@ async function loadWarehouseData(type) {
                             <span style="font-weight: 700; color: var(--text-main); font-size: 15px;">${displayTitle}</span>
                             <span style="font-size: 12px; color: #BBB;">${date}</span>
                         </div>
-                        <div style="font-size: 13px; color: #666; line-height: 1.4; flex:1;">${displayContent}</div>
+                        <div style="font-size: 13px; color: #666; line-height: 1.4; flex:1; white-space: pre-wrap;">${displayContent}</div>
                         
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid #F9F9F9;">
                             <div style="font-size: 12px; color: ${iconColor}; font-weight: 700;">${labelText}</div>
