@@ -44,9 +44,9 @@ function createEditorHTML() {
 
     // [修改] 1. placeholder 顏色改為 #E0E0E0 (更淺)
     // [修改] 2. select option 字體同步調整為 17px
-    // [修正] 版面分離：標題列固定，內容區獨立捲動，避免輸入時畫面跳動
+    // [修正] 改用 fixed 定位，確保手機鍵盤彈出時，標題列依然固定在頂部不位移
     const editorHTML = `
-    <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
+    <div id="editor-modal" class="hidden" style="position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="padding: 15px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #F0F0F0; background: #FFF; flex-shrink: 0;">
             <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
             <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
