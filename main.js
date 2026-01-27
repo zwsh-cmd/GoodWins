@@ -125,6 +125,13 @@ if(mainHeaderTitle && !mainHeaderTitle.querySelector('img')) {
 
 // --- 新增：通用提示視窗元件 (取代原生 alert) & 確認視窗 ---
 function createGlobalComponents() {
+    // [新增] 防止搜尋引擎索引 (SEO Privacy)
+    // 這會告訴 Google/Bing 不要收錄這個網頁
+    const metaRobots = document.createElement('meta');
+    metaRobots.name = "robots";
+    metaRobots.content = "noindex";
+    document.head.appendChild(metaRobots);
+
     // [修改] 1. 注入手機狀態列顏色 (與 APP 背景 #FAFAFA 一致)
     let metaTheme = document.querySelector('meta[name="theme-color"]');
     if (!metaTheme) {
