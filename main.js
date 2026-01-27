@@ -828,7 +828,17 @@ if (btnWarehouseEntry) {
 
 // 登入
 btns.login.addEventListener('click', () => {
-    signInWithPopup(auth, provider).catch(err => alert("登入失敗: " + err.message));
+    // [修正] 點擊後立即改變按鈕狀態為載入中，避免使用者覺得畫面無回應或跳回原點
+    btns.login.disabled = true;
+    btns.login.innerText = "載入中...";
+    
+    signInWithPopup(auth, provider)
+        .catch(err => {
+            // 若使用者手動關閉視窗或登入失敗，還原按鈕狀態
+            alert("登入失敗: " + err.message);
+            btns.login.disabled = false;
+            btns.login.innerText = "Google 登入";
+        });
 });
 
 // 開啟編輯器
