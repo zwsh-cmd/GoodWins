@@ -1,7 +1,7 @@
 // --- 1. 引入 Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion, writeBatch } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 // --- 2. 設定碼 ---
 const firebaseConfig = {
@@ -459,7 +459,7 @@ function createPKScreenHTML() {
                         btnDraw.disabled = true;
                         btnDraw.innerText = "挑選中...";
                         try {
-                            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000));
+                            const q = query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(1000));
                             const querySnapshot = await getDocs(q);
                             if (!querySnapshot.empty) {
                                 const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
@@ -532,6 +532,18 @@ document.getElementById('btn-clear-chat')?.addEventListener('click', async () =>
 
 // --- 5. 變數與 DOM 抓取 (介面產生後才能抓) ---
 let currentUser = null;
+
+// --- [核心架構] 私有路徑小助手 ---
+function getMyCollection(colName) {
+    if (!currentUser) throw new Error("請先登入");
+    // 自動指向 users/{uid}/{colName}
+    return collection(db, "users", currentUser.uid, colName);
+}
+function getMyDoc(colName, docId) {
+    if (!currentUser) throw new Error("請先登入");
+    return doc(db, "users", currentUser.uid, colName, docId);
+}
+
 let currentMode = '';
 let editingId = null; // [新增] 用來記錄正在編輯的文件 ID
 let currentAbortController = null; // [新增] 用於中斷 AI 請求
@@ -585,9 +597,10 @@ function createSearchHTML() {
             resultList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">搜尋中...</div>';
             
             try {
-                const p1 = getDocs(query(collection(db, "bad_things"), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(30)));
-                const p2 = getDocs(query(collection(db, "good_things"), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(30)));
-                const p3 = getDocs(query(collection(db, "pk_wins"), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(30)));
+                // 使用 getMyCollection，移除 where
+                const p1 = getDocs(query(getMyCollection("bad_things"), orderBy("createdAt", "desc"), limit(30)));
+                const p2 = getDocs(query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(30)));
+                const p3 = getDocs(query(getMyCollection("pk_wins"), orderBy("createdAt", "desc"), limit(30)));
                 
                 const [badSnap, goodSnap, winSnap] = await Promise.all([p1, p2, p3]);
 
@@ -879,7 +892,8 @@ async function handleSaveContent(shouldStartPK = false) {
         
         if (targetId) {
             // --- 編輯模式 ---
-            const docRef = doc(db, collectionName, targetId);
+            // 使用 getMyDoc 鎖定私人路徑
+            const docRef = getMyDoc(collectionName, targetId);
             await updateDoc(docRef, {
                 title: title,
                 content: content,
@@ -889,9 +903,8 @@ async function handleSaveContent(shouldStartPK = false) {
             });
         } else {
             // --- 新增模式 ---
-            // [修正] 取得新增後的文件參照，以便拿到 ID
-            const docRef = await addDoc(collection(db, collectionName), {
-                uid: currentUser.uid,
+            // 使用 getMyCollection 存入私人房間 (移除冗餘的 uid 欄位)
+            const docRef = await addDoc(getMyCollection(collectionName), {
                 title: title,
                 content: content,
                 score: score,
@@ -1244,12 +1257,13 @@ async function addChatMessage(sender, text, saveToDb = true, modelName = null) {
     // 這樣「重新開始戰局」的分隔線就會被記錄
     if (saveToDb && currentPKContext.docId) {
         try {
-            const docRef = doc(db, currentPKContext.collection, currentPKContext.docId);
-            const newMessage = { role: sender, text: text, time: Date.now(), modelName: modelName };
-            
-            await updateDoc(docRef, {
-                chatLogs: arrayUnion(newMessage)
-            });
+            // 使用 getMyDoc (collection 名稱會自動對應)
+        const docRef = getMyDoc(currentPKContext.collection, currentPKContext.docId);
+        const newMessage = { role: sender, text: text, time: Date.now(), modelName: modelName };
+
+        await updateDoc(docRef, {
+            chatLogs: arrayUnion(newMessage)
+        });
             
             currentPKContext.chatLogs.push(newMessage);
         } catch (e) {
@@ -1566,13 +1580,14 @@ function openEditor(mode, data = null) {
 
 // --- 7.5 設定與垃圾桶功能 ---
 
-// 垃圾桶 helper：移動到垃圾桶
+// 垃圾桶 helper：移動到垃圾桶 (新架構)
 async function moveToTrash(collectionName, docId) {
     try {
-        const ref = doc(db, collectionName, docId);
+        const ref = getMyDoc(collectionName, docId);
         const snap = await getDoc(ref);
         if(snap.exists()){
-            await addDoc(collection(db, "trash_bin"), {
+            // 存入 users/{uid}/trash_bin
+            await addDoc(getMyCollection("trash_bin"), {
                 originCol: collectionName,
                 originId: docId,
                 data: snap.data(),
@@ -1588,15 +1603,15 @@ async function moveToTrash(collectionName, docId) {
     }
 }
 
-// 垃圾桶 helper：還原
+// 垃圾桶 helper：還原 (新架構)
 async function restoreTrash(trashId) {
     try {
-        const ref = doc(db, "trash_bin", trashId);
+        const ref = getMyDoc("trash_bin", trashId);
         const snap = await getDoc(ref);
         if(snap.exists()){
             const { originCol, originId, data } = snap.data();
-            // 還原到原始位置 (使用 setDoc 指定 ID)
-            await setDoc(doc(db, originCol, originId), data);
+            // 還原到原始位置
+            await setDoc(getMyDoc(originCol, originId), data);
             await deleteDoc(ref);
             return true;
         }
@@ -1633,7 +1648,8 @@ async function createTrashHTML() {
     const listEl = document.getElementById('trash-list');
     listEl.innerHTML = '';
 
-    const q = query(collection(db, "trash_bin"), where("data.uid", "==", currentUser.uid), orderBy("delTime", "desc"), limit(50));
+    // 使用 getMyCollection，移除 where
+    const q = query(getMyCollection("trash_bin"), orderBy("delTime", "desc"), limit(50));
     const snap = await getDocs(q);
 
     if(snap.empty) {
@@ -1702,21 +1718,22 @@ async function createTrashHTML() {
 
 async function exportBackup() {
     try {
-        showSystemMessage("正在打包資料，請稍候...");
+        showSystemMessage("正在打包資料 (僅限個人資料)，請稍候...");
+        // 備份新架構資料
         const backup = {
-            version: 1,
+            version: 2, // 升級版本號
             date: new Date().toISOString(),
-            users: (await getDocs(collection(db, "users"))).docs.map(d => ({id: d.id, ...d.data()})),
-            good_things: (await getDocs(collection(db, "good_things"))).docs.map(d => ({id: d.id, ...d.data()})),
-            bad_things: (await getDocs(collection(db, "bad_things"))).docs.map(d => ({id: d.id, ...d.data()})),
-            pk_wins: (await getDocs(collection(db, "pk_wins"))).docs.map(d => ({id: d.id, ...d.data()}))
+            // users 不用備份全部，因為這是個人備份
+            good_things: (await getDocs(getMyCollection("good_things"))).docs.map(d => ({id: d.id, ...d.data()})),
+            bad_things: (await getDocs(getMyCollection("bad_things"))).docs.map(d => ({id: d.id, ...d.data()})),
+            pk_wins: (await getDocs(getMyCollection("pk_wins"))).docs.map(d => ({id: d.id, ...d.data()}))
         };
-        
+
         const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `goodwins_backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.download = `goodwins_v2_${new Date().toISOString().slice(0,10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
         showSystemMessage("✅ 備份已下載！");
@@ -1731,18 +1748,19 @@ async function importBackup(file) {
     reader.onload = async (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            if (!data.version) throw new Error("格式錯誤");
-            
+            // 支援 v1 (舊版) 與 v2 (新版) 格式
+
             showSystemMessage("正在還原資料庫...");
             const restoreCol = async (colName, items) => {
                 if(!items) return;
                 for (const item of items) {
                     const { id, ...docData } = item;
-                    await setDoc(doc(db, colName, id), docData); // 使用 setDoc 保留原始 ID
+                    // 使用 getMyDoc 還原
+                    await setDoc(getMyDoc(colName, id), docData); 
                 }
             };
 
-            await restoreCol("users", data.users);
+            // data.users 忽略，因為我們鎖定在當前使用者
             await restoreCol("good_things", data.good_things);
             await restoreCol("bad_things", data.bad_things);
             await restoreCol("pk_wins", data.pk_wins);
@@ -2137,9 +2155,9 @@ async function loadWarehouseData(type) {
     }
 
     try {
-        // [策略修正] 1. 資料庫查詢：使用 createdAt 抓取
-        const q = query(collection(db, collectionName), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"), limit(100));
-        const querySnapshot = await getDocs(q);
+        // [策略修正] 1. 資料庫查詢：使用 getMyCollection (自動鎖定使用者，無需 where uid)
+    const q = query(getMyCollection(collectionName), orderBy("createdAt", "desc"), limit(100));
+    const querySnapshot = await getDocs(q);
         
         listEl.innerHTML = ''; 
 
@@ -2304,7 +2322,8 @@ async function handlePKResult(winner) {
         floatArea.innerHTML = ''; 
 
         try {
-            const q = query(collection(db, "good_things"), orderBy("createdAt", "desc"), limit(1000));
+            // [修正] 改用 getMyCollection
+            const q = query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(1000));
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
                 if (currentPKContext.good?.id) currentPKContext.shownGoodCardIds.push(currentPKContext.good.id);
@@ -2369,42 +2388,44 @@ async function handlePKResult(winner) {
         // 2. 寫入勝利紀錄
         try {
             if (currentPKContext.winId) {
-                 const winRef = doc(db, "pk_wins", currentPKContext.winId);
-                 await updateDoc(winRef, {
-                    goodTitle: currentPKContext.good?.title || "未知好事",
-                    goodContent: currentPKContext.good?.content || "", 
-                    chatLogs: currentPKContext.chatLogs, 
+             // 使用 getMyDoc
+             const winRef = getMyDoc("pk_wins", currentPKContext.winId);
+             await updateDoc(winRef, {
+                goodTitle: currentPKContext.good?.title || "未知好事",
+                goodContent: currentPKContext.good?.content || "", 
+                chatLogs: currentPKContext.chatLogs, 
+                updatedAt: serverTimestamp()
+             });
+        } else {
+            const winData = {
+                // uid: currentUser.uid, // 移除 redundant uid
+                badTitle: currentPKContext.bad?.title || "未知鳥事",
+                badContent: currentPKContext.bad?.content || "", 
+                badScore: parseInt(currentPKContext.bad?.score) || 1,
+
+                goodTitle: currentPKContext.good?.title || "未知好事",
+                goodContent: currentPKContext.good?.content || "", 
+                goodScore: parseInt(currentPKContext.good?.score) || 1,
+
+                score: scoreToAdd,
+                chatLogs: currentPKContext.chatLogs,
+                originalBadId: currentPKContext.collection === 'bad_things' ? currentPKContext.docId : null,
+                createdAt: serverTimestamp()
+            };
+
+            // 使用 getMyCollection
+            const winRef = await addDoc(getMyCollection("pk_wins"), winData);
+            currentPKContext.winId = winRef.id; 
+
+            if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
+                // 使用 getMyDoc
+                await updateDoc(getMyDoc("bad_things", currentPKContext.docId), {
+                    isDefeated: true,
+                    lastWinId: winRef.id, 
                     updatedAt: serverTimestamp()
-                 });
-            } else {
-                const winData = {
-                    uid: currentUser.uid,
-                    badTitle: currentPKContext.bad?.title || "未知鳥事",
-                    badContent: currentPKContext.bad?.content || "", 
-                    // [新增] 儲存等級以便回顧
-                    badScore: parseInt(currentPKContext.bad?.score) || 1,
-
-                    goodTitle: currentPKContext.good?.title || "未知好事",
-                    goodContent: currentPKContext.good?.content || "", 
-                    goodScore: parseInt(currentPKContext.good?.score) || 1,
-
-                    score: scoreToAdd,
-                    chatLogs: currentPKContext.chatLogs,
-                    originalBadId: currentPKContext.collection === 'bad_things' ? currentPKContext.docId : null,
-                    createdAt: serverTimestamp()
-                };
-                
-                const winRef = await addDoc(collection(db, "pk_wins"), winData);
-                currentPKContext.winId = winRef.id; 
-
-                if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
-                    await updateDoc(doc(db, "bad_things", currentPKContext.docId), {
-                        isDefeated: true,
-                        lastWinId: winRef.id, 
-                        updatedAt: serverTimestamp()
-                    });
-                }
+                });
             }
+        }
 
         } catch(e) {
             console.error("Save Win Error", e);
@@ -2523,90 +2544,3 @@ function setupNavigation() {
 
 // 啟動導航監聽
 setupNavigation();
-
-// ==========================================
-// 🚀 一次性搬家工具 (執行完確認無誤後請整段刪除)
-// ==========================================
-async function runMigration() {
-    if (!currentUser) return alert("❌ 請先登入才能搬家！");
-    
-    const confirmMove = confirm(`【準備搬家】\n\n即將把資料從「公共廣場」複製到「${currentUser.displayName || '你'} 的私人房間」。\n\n過程完全不會刪除舊資料，請放心。\n\n確定要開始嗎？`);
-    if (!confirmMove) return;
-
-    // 定義要搬移的四個舊倉庫
-    const collections = ["good_things", "bad_things", "pk_wins", "trash_bin"];
-    let totalMoved = 0;
-    
-    const btn = document.getElementById('btn-migration-tool');
-    if(btn) {
-        btn.disabled = true;
-        btn.innerText = "📦 搬家中...請勿關閉";
-    }
-
-    try {
-        console.log("🚀 開始執行搬家任務...");
-
-        for (const colName of collections) {
-            // 1. 從舊倉庫撈出「屬於你」的資料
-            let q;
-            if (colName === "trash_bin") {
-                 q = query(collection(db, colName), where("data.uid", "==", currentUser.uid));
-            } else {
-                 q = query(collection(db, colName), where("uid", "==", currentUser.uid));
-            }
-            
-            const snapshot = await getDocs(q);
-            console.log(`📂 掃描舊倉庫 ${colName}: 發現 ${snapshot.size} 筆資料`);
-
-            if (snapshot.empty) continue;
-
-            // 2. 準備批次寫入 (Batch)
-            let batch = writeBatch(db); 
-            let count = 0;
-
-            for (const docSnap of snapshot.docs) {
-                const data = docSnap.data();
-                
-                // 3. 定義新家地址： users/{uid}/{collectionName}/{docId}
-                // 使用 setDoc 確保 ID 與原本一模一樣
-                const newRef = doc(db, "users", currentUser.uid, colName, docSnap.id);
-                
-                batch.set(newRef, data);
-                count++;
-                totalMoved++;
-
-                // Firestore 限制每次批次最多 500 筆，我們設 400 安全一點
-                if (count >= 400) {
-                    await batch.commit();
-                    batch = writeBatch(db); 
-                    count = 0;
-                }
-            }
-            // 載走剩下的貨
-            if (count > 0) await batch.commit();
-        }
-
-        if(btn) btn.innerText = "✅ 搬家完成！";
-        alert(`🎉 恭喜！搬家成功！\n\n共成功複製了 ${totalMoved} 筆資料到你的新房間。\n\n現在請通知我，我們進行最後一步：修改程式碼路徑。`);
-        
-    } catch (e) {
-        console.error(e);
-        if(btn) {
-            btn.innerText = "❌ 失敗";
-            btn.disabled = false;
-        }
-        alert("搬家發生錯誤 (請看 Console): " + e.message);
-    }
-}
-
-// 自動在畫面右下角產生按鈕
-setTimeout(() => {
-    if (!document.getElementById('btn-migration-tool')) {
-        const btn = document.createElement("button");
-        btn.id = 'btn-migration-tool';
-        btn.innerText = "🚀 執行資料搬家 (舊 -> 新)";
-        btn.style.cssText = "position:fixed; bottom:20px; right:20px; z-index:9999; padding:15px 25px; background:#D32F2F; color:white; font-weight:bold; border:2px solid #FFF; border-radius:30px; box-shadow:0 4px 15px rgba(0,0,0,0.3); cursor:pointer; font-size:14px;";
-        btn.onclick = runMigration;
-        document.body.appendChild(btn);
-    }
-}, 3000);
