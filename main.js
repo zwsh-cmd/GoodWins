@@ -1633,7 +1633,7 @@ async function createTrashHTML() {
     const listEl = document.getElementById('trash-list');
     listEl.innerHTML = '';
 
-    const q = query(collection(db, "trash_bin"), orderBy("delTime", "desc"), limit(50));
+    const q = query(collection(db, "trash_bin"), where("data.uid", "==", currentUser.uid), orderBy("delTime", "desc"), limit(50));
     const snap = await getDocs(q);
 
     if(snap.empty) {
