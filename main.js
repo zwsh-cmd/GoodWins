@@ -1,7 +1,7 @@
 // --- 1. 引入 Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion, writeBatch } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 // --- 2. 設定碼 ---
 const firebaseConfig = {
@@ -2523,3 +2523,90 @@ function setupNavigation() {
 
 // 啟動導航監聽
 setupNavigation();
+
+// ==========================================
+// 🚀 一次性搬家工具 (執行完確認無誤後請整段刪除)
+// ==========================================
+async function runMigration() {
+    if (!currentUser) return alert("❌ 請先登入才能搬家！");
+    
+    const confirmMove = confirm(`【準備搬家】\n\n即將把資料從「公共廣場」複製到「${currentUser.displayName || '你'} 的私人房間」。\n\n過程完全不會刪除舊資料，請放心。\n\n確定要開始嗎？`);
+    if (!confirmMove) return;
+
+    // 定義要搬移的四個舊倉庫
+    const collections = ["good_things", "bad_things", "pk_wins", "trash_bin"];
+    let totalMoved = 0;
+    
+    const btn = document.getElementById('btn-migration-tool');
+    if(btn) {
+        btn.disabled = true;
+        btn.innerText = "📦 搬家中...請勿關閉";
+    }
+
+    try {
+        console.log("🚀 開始執行搬家任務...");
+
+        for (const colName of collections) {
+            // 1. 從舊倉庫撈出「屬於你」的資料
+            let q;
+            if (colName === "trash_bin") {
+                 q = query(collection(db, colName), where("data.uid", "==", currentUser.uid));
+            } else {
+                 q = query(collection(db, colName), where("uid", "==", currentUser.uid));
+            }
+            
+            const snapshot = await getDocs(q);
+            console.log(`📂 掃描舊倉庫 ${colName}: 發現 ${snapshot.size} 筆資料`);
+
+            if (snapshot.empty) continue;
+
+            // 2. 準備批次寫入 (Batch)
+            let batch = writeBatch(db); 
+            let count = 0;
+
+            for (const docSnap of snapshot.docs) {
+                const data = docSnap.data();
+                
+                // 3. 定義新家地址： users/{uid}/{collectionName}/{docId}
+                // 使用 setDoc 確保 ID 與原本一模一樣
+                const newRef = doc(db, "users", currentUser.uid, colName, docSnap.id);
+                
+                batch.set(newRef, data);
+                count++;
+                totalMoved++;
+
+                // Firestore 限制每次批次最多 500 筆，我們設 400 安全一點
+                if (count >= 400) {
+                    await batch.commit();
+                    batch = writeBatch(db); 
+                    count = 0;
+                }
+            }
+            // 載走剩下的貨
+            if (count > 0) await batch.commit();
+        }
+
+        if(btn) btn.innerText = "✅ 搬家完成！";
+        alert(`🎉 恭喜！搬家成功！\n\n共成功複製了 ${totalMoved} 筆資料到你的新房間。\n\n現在請通知我，我們進行最後一步：修改程式碼路徑。`);
+        
+    } catch (e) {
+        console.error(e);
+        if(btn) {
+            btn.innerText = "❌ 失敗";
+            btn.disabled = false;
+        }
+        alert("搬家發生錯誤 (請看 Console): " + e.message);
+    }
+}
+
+// 自動在畫面右下角產生按鈕
+setTimeout(() => {
+    if (!document.getElementById('btn-migration-tool')) {
+        const btn = document.createElement("button");
+        btn.id = 'btn-migration-tool';
+        btn.innerText = "🚀 執行資料搬家 (舊 -> 新)";
+        btn.style.cssText = "position:fixed; bottom:20px; right:20px; z-index:9999; padding:15px 25px; background:#D32F2F; color:white; font-weight:bold; border:2px solid #FFF; border-radius:30px; box-shadow:0 4px 15px rgba(0,0,0,0.3); cursor:pointer; font-size:14px;";
+        btn.onclick = runMigration;
+        document.body.appendChild(btn);
+    }
+}, 3000);
