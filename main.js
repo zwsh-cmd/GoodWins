@@ -520,7 +520,8 @@ document.getElementById('btn-clear-chat')?.addEventListener('click', async () =>
     const confirmed = await showConfirmMessage("確定要刪除此局所有對話紀錄嗎？\n(操作不可復原)", "確定刪除", "取消");
     if(confirmed && currentPKContext.docId) {
         try {
-            const docRef = doc(db, currentPKContext.collection, currentPKContext.docId);
+            // [修正] 改用 getMyDoc
+            const docRef = getMyDoc(currentPKContext.collection, currentPKContext.docId);
             await updateDoc(docRef, { chatLogs: [] });
             currentPKContext.chatLogs = [];
             document.getElementById('chat-history').innerHTML = '';
@@ -756,8 +757,8 @@ if(btnExitPK) {
             // 如果是 Re-PK 失敗，必須刪除勝利紀錄並重置鳥事卡
             if (currentPKContext.wasDefeated && currentPKContext.docId) {
                 
-                // 重置鳥事卡 (變回紅色)
-                const docRef = doc(db, 'bad_things', currentPKContext.docId);
+                // 重置鳥事卡 (變回紅色) [修正] 改用 getMyDoc
+                const docRef = getMyDoc('bad_things', currentPKContext.docId);
                 await updateDoc(docRef, {
                     isDefeated: false,
                     lastWinId: null,
@@ -767,14 +768,15 @@ if(btnExitPK) {
 
                 // 如果有對應的勝利紀錄 (lastWinId 或 winId)，刪除它
                 if (currentPKContext.winId) {
-                    await deleteDoc(doc(db, 'pk_wins', currentPKContext.winId));
+                    // [修正] 改用 getMyDoc
+                    await deleteDoc(getMyDoc('pk_wins', currentPKContext.winId));
                 }
                 
                 showSystemMessage("挑戰未完成，鳥事已回歸待擊敗狀態。");
             } 
             else if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
-                // 一般 PK 中途離開，只更新對話與時間
-                const docRef = doc(db, 'bad_things', currentPKContext.docId);
+                // 一般 PK 中途離開，只更新對話與時間 [修正] 改用 getMyDoc
+                const docRef = getMyDoc('bad_things', currentPKContext.docId);
                 await updateDoc(docRef, {
                     updatedAt: serverTimestamp(),
                     chatLogs: currentPKContext.chatLogs
