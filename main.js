@@ -60,7 +60,7 @@ function createEditorHTML() {
         <div style="flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column;">
             <input id="input-title" type="text" placeholder="標題" autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:#666; margin-bottom:10px;">
             
-            <textarea id="input-content" placeholder="內容" name="gw-content-field" style="width:100%; flex:1; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
+            <textarea id="input-content" placeholder="內容" name="gw-content-field" style="width:100%; flex:1; min-height:250px; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
             
             <div style="padding:10px 0; display:flex; justify-content:flex-end;">
                 <button id="btn-start-pk" style="display:none; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; padding:6px 20px; border-radius:50px; font-weight:700; font-size:14px; cursor:pointer;">開始PK</button>
