@@ -42,9 +42,7 @@ function createEditorHTML() {
         appearance: none;
     `;
 
-    // [修改] 1. placeholder 顏色改為 #E0E0E0 (更淺)
-    // [修改] 2. select option 字體同步調整為 17px
-    // [修正] 使用 Visual Viewport API 解決鍵盤遮擋問題 (標準解法，無須費用)
+    // [修正] 使用 Visual Viewport API 解決鍵盤遮擋問題 (標準解法)
     // 改回 absolute，並利用 JS 動態計算視口高度與偏移
     const editorHTML = `
     <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
@@ -111,6 +109,7 @@ function createEditorHTML() {
             window.visualViewport.addEventListener('scroll', handleResize);
         }
     }
+}
 
 // 馬上執行，把畫面畫出來
 createEditorHTML();
