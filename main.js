@@ -45,7 +45,7 @@ function createEditorHTML() {
     // [修正] 使用 Visual Viewport API 解決鍵盤遮擋問題 (標準解法)
     // 改回 absolute，並利用 JS 動態計算視口高度與偏移
     const editorHTML = `
-    <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
+    <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100vh; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="padding: 15px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #F0F0F0; background: #FFF; flex-shrink: 0;">
             <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
             <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
@@ -99,9 +99,8 @@ function createEditorHTML() {
             const modal = document.getElementById('editor-modal');
             const handleResize = () => {
                 if (!modal.classList.contains('hidden')) {
-                    // 將高度設為視口高度 (鍵盤彈出時這裡會變小)
-                    modal.style.height = window.visualViewport.height + 'px';
-                    // 將頂部設為視口偏移量 (避免被瀏覽器強制推移)
+                    // [修正] 不再調整高度，讓鍵盤直接覆蓋底部內容 (仿 Threads 體驗)
+                    // 僅調整 Top 確保視窗頂部對齊，避免跑版
                     modal.style.top = window.visualViewport.offsetTop + 'px';
                 }
             };
