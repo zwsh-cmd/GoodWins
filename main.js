@@ -966,18 +966,15 @@ async function handleSaveContent(shouldStartPK = false) {
             // 1. 偷天換日：把當前的「編輯器」歷史紀錄替換成「倉庫」
             history.replaceState({ tier: 'warehouse' }, '', '');
             
-            // 2. 視覺切換：關閉編輯器，開啟倉庫
+            // 2. 視覺切換：先關閉編輯器
+            screens.editor.classList.add('hidden'); 
             if (!screens.warehouse) screens.warehouse = document.getElementById('warehouse-modal');
-            screens.warehouse.classList.remove('hidden');
-            screens.editor.classList.add('hidden'); // 確保編輯器隱藏
-            
-            // 3. 載入資料：確保使用者看到剛剛新增的鳥事
-            loadWarehouseData('bad');
 
-            // 4. 分流處理
+            // 3. 分流處理
             if (shouldStartPK) {
-                // 如果要 PK，會在目前的 [首頁] -> [倉庫] 之上，再 Push 一層 [PK]
-                // 這樣「離開」時就會自然回到 [倉庫]
+                // [修正] 如果要 PK，直接進入 PK，不要顯示倉庫 (避免 z-index 遮擋)
+                // 由於已經 replaceState 為 warehouse，再 startPK (pushState pk)，
+                // 歷史堆疊會變成 Home -> Warehouse -> PK，符合需求。
                 startPK({ 
                     id: targetId, 
                     title, 
@@ -987,11 +984,12 @@ async function handleSaveContent(shouldStartPK = false) {
                     chatLogs: []
                 }, collectionName); 
             } else {
-                // 如果只是儲存，就停留在 [倉庫]
-                // 這樣按「返回」時，就會回到 [首頁]
+                // 如果只是儲存，顯示倉庫並載入資料
+                screens.warehouse.classList.remove('hidden');
+                loadWarehouseData('bad');
                 showSystemMessage("鳥事已儲存！");
             }
-        } 
+        }
         
         // 情況 B：如果是「好事」 (Good Thing)
         // 目標：維持原本邏輯，儲存後回到上一頁 (可能是首頁，也可能是從倉庫進來的)
