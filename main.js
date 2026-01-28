@@ -968,13 +968,19 @@ async function handleSaveContent(shouldStartPK = false) {
             
             // 2. 視覺切換：先關閉編輯器
             screens.editor.classList.add('hidden'); 
+            
+            // [關鍵修正] 確保倉庫 DOM 已存在，並預先設定為「待PK鳥事」狀態
+            // 這樣當從 PK 頁面「離開」觸發 popstate 時，程式檢查 DOM 才會知道要留在「待PK鳥事」分頁
+            createWarehouseHTML(); 
             if (!screens.warehouse) screens.warehouse = document.getElementById('warehouse-modal');
+            loadWarehouseData('bad'); // 這裡會預先設定好 Tab 的顏色狀態 (即使視窗現在可能被 PK 蓋住或隱藏)
 
             // 3. 分流處理
             if (shouldStartPK) {
-                // [修正] 如果要 PK，直接進入 PK，不要顯示倉庫 (避免 z-index 遮擋)
+                // [修正] 如果要 PK，直接進入 PK
                 // 由於已經 replaceState 為 warehouse，再 startPK (pushState pk)，
-                // 歷史堆疊會變成 Home -> Warehouse -> PK，符合需求。
+                // 歷史堆疊會變成 Home -> Warehouse -> PK。
+                // 且因為上面已經 loadWarehouseData('bad')，按離開回頭時，popstate 會讀到正確的 Tab 狀態。
                 startPK({ 
                     id: targetId, 
                     title, 
@@ -984,9 +990,8 @@ async function handleSaveContent(shouldStartPK = false) {
                     chatLogs: []
                 }, collectionName); 
             } else {
-                // 如果只是儲存，顯示倉庫並載入資料
+                // 如果只是儲存，顯示倉庫 (因為上面已經 load 了，這裡只要移除 hidden)
                 screens.warehouse.classList.remove('hidden');
-                loadWarehouseData('bad');
                 showSystemMessage("鳥事已儲存！");
             }
         }
