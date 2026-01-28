@@ -45,7 +45,7 @@ function createEditorHTML() {
     // [修正] 使用 Visual Viewport API 解決鍵盤遮擋問題 (標準解法)
     // 改回 absolute，並利用 JS 動態計算視口高度與偏移
     const editorHTML = `
-    <div id="editor-modal" class="hidden" style="position: fixed; top:0; left:0; width:100%; height:100%; overflow: hidden; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
+    <div id="editor-modal" class="hidden" style="position: fixed; top:0; left:0; right:0; bottom:0; overflow: hidden; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
         <div style="padding: 15px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #F0F0F0; background: #FFF; flex-shrink: 0;">
             <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
             <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
@@ -1627,8 +1627,6 @@ function openEditor(mode, data = null) {
     // 如果是編輯模式，還原下拉選單的值
     if(data) inputs.score.value = data.score;
 
-    // [修正] 強制鎖定高度為當前螢幕像素，防止鍵盤彈出時壓縮版面或滑動顫抖 (仿 Threads)
-    screens.editor.style.height = window.innerHeight + 'px';
     screens.editor.classList.remove('hidden');
 }
 
