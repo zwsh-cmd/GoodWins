@@ -42,9 +42,9 @@ function createEditorHTML() {
         appearance: none;
     `;
 
-    // [修正] 改用 height: 100dvh 確保填滿手機動態視窗高度，解決底部露出背景色問題
+    // [修正] 改用 top:0 + bottom:0 強制垂直拉伸填滿，解決 100dvh 可能計算誤差導致的露底問題
     const editorHTML = `
-    <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100dvh; background:#FFF; z-index:500; display: flex; flex-direction: column;">
+    <div id="editor-modal" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:auto; bottom:0; background:#FFF; z-index:500; display: flex; flex-direction: column;">
         
         <div style="flex-shrink: 0; background: #FFF; z-index: 10; border-bottom: 1px solid #F0F0F0; box-shadow: 0 2px 10px rgba(0,0,0,0.02);">
             <div style="padding: 15px 24px; display:flex; justify-content:space-between; align-items:center;">
