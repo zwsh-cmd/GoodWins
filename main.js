@@ -294,8 +294,8 @@ function createPKScreenHTML() {
                 
                 <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
-                <div style="padding: 10px 15px; border-top: 1px solid #F0F0F0; position: relative; background: #FFF; z-index: 25;">
-                    <textarea id="chat-input" rows="1" placeholder="跟 AI 討論..." style="width: 100%; box-sizing: border-box; padding: 12px 55px 12px 15px; border: 1px solid #EEE; border-radius: 24px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px; resize: none; overflow-y: auto; line-height: 1.5; max-height: 100px; display: block;"></textarea>
+                <div style="padding: 10px 0 10px 15px; border-top: 1px solid #F0F0F0; position: relative; background: #FFF; z-index: 25;">
+                    <textarea id="chat-input" rows="1" placeholder="跟 AI 討論..." style="width: 100%; box-sizing: border-box; padding: 12px 60px 12px 15px; border: 1px solid #EEE; border-radius: 24px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px; resize: none; overflow-y: auto; line-height: 1.5; max-height: 100px; display: block;"></textarea>
                     <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; position: absolute; right: 22px; bottom: 13px; z-index: 10;">
                         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
