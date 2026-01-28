@@ -43,7 +43,7 @@ function createEditorHTML() {
     `;
 
     const editorHTML = `
-    <div id="editor-modal" class="hidden" style="position: fixed; top:0; left:0; width:100%; height:100%; background:#FFF; z-index:500; display: flex; flex-direction: column;">
+    <div id="editor-modal" class="hidden" style="position: fixed; top:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; height:100%; background:#FFF; z-index:500; display: flex; flex-direction: column;">
         
         <div style="flex-shrink: 0; background: #FFF; z-index: 10; border-bottom: 1px solid #F0F0F0; box-shadow: 0 2px 10px rgba(0,0,0,0.02);">
             <div style="padding: 15px 24px; display:flex; justify-content:space-between; align-items:center;">
