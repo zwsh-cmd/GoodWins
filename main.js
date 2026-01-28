@@ -464,7 +464,12 @@ function createPKScreenHTML() {
                     document.getElementById('pk-good-header').innerText = "好事";
                     currentPKContext.shownGoodCardIds = [];
 
-                    // 4. 插入浮動手動按鈕
+                    // [修正] 4. 在按鈕出現前，先插入分隔線
+                    if (currentPKContext.chatLogs.length > 0) {
+                        await addChatMessage('system', "────── 重新開啟戰局 ──────", true);
+                    }
+
+                    // 5. 插入浮動手動按鈕
                     const floatArea = document.getElementById('pk-floating-area');
                     floatArea.innerHTML = '';
                     const btnStyle = "display:block; margin:6px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
@@ -482,7 +487,8 @@ function createPKScreenHTML() {
                             if (!querySnapshot.empty) {
                                 const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
                                 if (!newGood || newGood === "AI_FAILED") {
-                                    btnDraw.innerText = "請重試";
+                                    // [修正] 失敗時，變回原本文字，允許再按一次
+                                    btnDraw.innerText = "抽好事卡";
                                     btnDraw.disabled = false;
                                     return;
                                 }
@@ -499,13 +505,23 @@ function createPKScreenHTML() {
                                 btnChat.onclick = async () => {
                                     btnChat.disabled = true;
                                     btnChat.innerText = "思考中...";
-                                    await addChatMessage('system', "────── 重新開始戰局 ──────", true);
-                                    await callGeminiChat(`【系統指令：忽略舊結果。新好事卡為（${newGood.title}）。請開始價值辯論。】`, true);
-                                    btnChat.remove();
+                                    // [修正] 移除此處的 addChatMessage 分隔線
+                                    // [修正] 增加錯誤處理：若 AI 失敗則變回原按鈕
+                                    const success = await callGeminiChat(`【系統指令：忽略舊結果。新好事卡為（${newGood.title}）。請開始價值辯論。】`, true);
+                                    if(success) {
+                                        btnChat.remove();
+                                    } else {
+                                        btnChat.disabled = false;
+                                        btnChat.innerText = "請說服我";
+                                    }
                                 };
                                 floatArea.appendChild(btnChat);
                             }
-                        } catch (e) { btnDraw.disabled = false; btnDraw.innerText = "失敗，請重試"; }
+                        } catch (e) { 
+                            // [修正] 失敗時，變回原本文字
+                            btnDraw.disabled = false; 
+                            btnDraw.innerText = "抽好事卡"; 
+                        }
                     };
                     floatArea.appendChild(btnDraw);
                 }
@@ -1221,7 +1237,8 @@ async function startPK(data, collectionSource, options = {}) {
                 if (!querySnapshot.empty) {
                     const selectedGoodThing = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
                     if (!selectedGoodThing || selectedGoodThing === "AI_FAILED") {
-                        btnDraw.innerText = "請稍候重試";
+                        // [修正] 失敗時，變回原本文字
+                        btnDraw.innerText = "抽好事卡";
                         btnDraw.disabled = false;
                         return;
                     }
@@ -1238,18 +1255,31 @@ async function startPK(data, collectionSource, options = {}) {
                     btnChat.onclick = async () => {
                         btnChat.disabled = true;
                         btnChat.innerText = "思考中...";
-                        // [修正] 分隔線已在按鈕出現時顯示，此處移除重複代碼
+                        
+                        // [修正] 呼叫 AI 並接收成功與否的回傳值
+                        let success = false;
                         if (currentPKContext.chatLogs.length > 0) {
-                            await addChatMessage('system', "────── 重新開啟戰局 ──────", true);
-                            await callGeminiChat(`【系統指令：忽略舊結果。新好事卡為（${selectedGoodThing.title}）。請開始價值辯論。】`, true);
+                            // [修正] 移除此處的分隔線，因為按鈕出現前已經加過了
+                            success = await callGeminiChat(`【系統指令：忽略舊結果。新好事卡為（${selectedGoodThing.title}）。請開始價值辯論。】`, true);
                         } else {
-                            await callGeminiChat("【系統指令：PK 開始。策略選牌完成，進行價值辯論。】", true);
+                            success = await callGeminiChat("【系統指令：PK 開始。策略選牌完成，進行價值辯論。】", true);
                         }
-                        btnChat.remove();
+
+                        // [修正] 只有成功才移除按鈕，失敗則變回原樣
+                        if (success) {
+                            btnChat.remove();
+                        } else {
+                            btnChat.disabled = false;
+                            btnChat.innerText = "請說服我";
+                        }
                     };
                     floatArea.appendChild(btnChat);
                 }
-            } catch (e) { btnDraw.disabled = false; btnDraw.innerText = "連線失敗，請重試"; }
+            } catch (e) { 
+                // [修正] 失敗時，變回原本文字
+                btnDraw.disabled = false; 
+                btnDraw.innerText = "抽好事卡"; 
+            }
         };
         floatArea.appendChild(btnDraw);
     }
@@ -1315,7 +1345,7 @@ async function callGeminiChat(userMessage, isHidden = false) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey) {
         addChatMessage('system', "請先點擊設定輸入 API Key。", true);
-        return;
+        return false; // [修改] 回傳 false
     }
 
     if (currentAbortController) currentAbortController.abort(); 
@@ -1330,6 +1360,8 @@ async function callGeminiChat(userMessage, isHidden = false) {
     loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic;";
     chatHistory.appendChild(loadingDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
+
+    let finalSuccess = false; // [修改] 追蹤最終結果
 
     try {
         const modelList = await getSortedModelList(apiKey);
@@ -1399,23 +1431,18 @@ ${goodText}
 【回應限制】請將回應長度控制在 200 個中文字以內。
         `;
 
-        let success = false;
-        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-        // [新增] 輔助函式：更新載入訊息
+        let loopSuccess = false; // [修改] 區域變數
         const updateLoadingMsg = (msg) => {
             const el = document.getElementById(loadingId);
             if(el) el.innerText = msg;
         };
 
-        // [修正] 移除 while 迴圈與自動重試，改為單次掃描並詳列錯誤資訊
         if (signal.aborted) throw new Error("AbortError");
 
         for (const model of modelList) {
             if (signal.aborted) throw new Error("AbortError");
 
             try {
-                // --- 監控：紀錄聊天 API 發送 ---
                 window.apiCallCount++;
                 console.warn(`[監控] 準備發送 API (對話)！目前累積發送 ${window.apiCallCount} 次`);
 
@@ -1444,7 +1471,8 @@ ${goodText}
                     if(loadingEl) loadingEl.remove();
 
                     addChatMessage('ai', aiText, true, model.displayName);
-                    success = true; 
+                    loopSuccess = true; 
+                    finalSuccess = true; // [修改] 標記為成功
                     break; 
                 } else {
                     throw new Error("EMPTY_RESPONSE");
@@ -1456,7 +1484,6 @@ ${goodText}
                 const errMsg = err.message || "";
                 console.warn(`[聊天] 模型 ${model.id} 失敗 (${errMsg})`);
 
-                // [修正] 增加詳細錯誤代碼判斷與即時中止邏輯
                 const errorMap = {
                     "400": "請求內容錯誤 (400) - 請檢查對話長度或內容。",
                     "401": "API Key 無效 (401) - 請檢查設定中的金鑰。",
@@ -1475,25 +1502,24 @@ ${goodText}
                     }
                 }
 
-                // 若遇到 429 (額度) 或 401 (金鑰)，通常換模型也無效，直接停止
                 if (friendlyMsg && (errMsg.includes("429") || errMsg.includes("401"))) {
                     const loadingEl = document.getElementById(loadingId);
                     if(loadingEl) loadingEl.remove();
                     addChatMessage('system', `⛔ 連線停止：${friendlyMsg}`, true);
-                    success = true; // 設為 true 以阻止外部再拋出通用錯誤，我們已在此處理完畢
-                    break; // 停止迴圈，不再嘗試其他模型
+                    loopSuccess = true; 
+                    // [修改] 雖然停止了，但因為是「連線停止」錯誤，視為 AI 未成功回應，finalSuccess 保持 false
+                    break; 
                 }
 
                 updateLoadingMsg(`模型 ${model.id} 異常 (${errMsg})，嘗試下一條線路...`);
             }
         }
 
-        // 迴圈結束後，若仍未成功 (且未被上述錯誤代碼攔截處理)
-        if (!success) {
+        if (!loopSuccess) {
             const loadingEl = document.getElementById(loadingId);
             if(loadingEl) loadingEl.remove();
             addChatMessage('system', "❌ 所有 AI 線路皆忙碌或無回應，請稍後再試。", true);
-            success = true; // 設為 true，避免進入下方的 catch(e) 通用錯誤區塊
+            // finalSuccess 保持 false
         }
 
     } catch (e) {
@@ -1504,11 +1530,12 @@ ${goodText}
             console.log("使用者中斷了請求");
         } else {
             console.error(e);
-            // [修正] 錯誤訊息強制存檔 (true)
             addChatMessage('system', "目前找不到適合的AI模型，請稍後再試一次。", true);
         }
+        finalSuccess = false; // [修改] 確保失敗
     } finally {
         currentAbortController = null;
+        return finalSuccess; // [修改] 回傳結果
     }
 }
 
@@ -2391,8 +2418,15 @@ async function handlePKResult(winner) {
                     btnChat.disabled = true;
                     btnChat.innerText = "思考中...";
                     const prompt = `【系統指令：使用者判定鳥事勝出。系統已選出新好事（${newGood.title}）。請執行模式三：給出全新觀點，嘗試再次說服。】`;
-                    await callGeminiChat(prompt, true);
-                    btnChat.remove();
+                    
+                    // [修正] 檢查回傳值，失敗則變回原本文字
+                    const success = await callGeminiChat(prompt, true);
+                    if (success) {
+                        btnChat.remove();
+                    } else {
+                        btnChat.disabled = false;
+                        btnChat.innerText = "請說服我";
+                    }
                 };
                 floatArea.appendChild(btnChat);
             }
