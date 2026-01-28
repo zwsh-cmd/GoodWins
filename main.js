@@ -27,7 +27,7 @@ window.pkTriggerCount = 0;  // PK 畫面進入次數
 function createEditorHTML() {
     if (document.getElementById('editor-modal')) return;
 
-    // [修改] 下拉選單文字微調至 17px
+    // 下拉選單樣式 (維持不變)
     const selectStyle = `
         width:100%; 
         padding:12px 40px 12px 12px; 
@@ -42,14 +42,18 @@ function createEditorHTML() {
         appearance: none;
     `;
 
-    // [修正] 使用 Visual Viewport API 解決鍵盤遮擋問題 (標準解法)
-    // 改回 absolute，並利用 JS 動態計算視口高度與偏移
     const editorHTML = `
-    <div id="editor-modal" class="hidden" style="position: fixed; top:0; left:0; right:0; bottom:0; overflow: hidden; background:rgba(255,255,255,0.98); z-index:500; display: flex; flex-direction: column;">
-        <div style="padding: 15px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #F0F0F0; background: #FFF; flex-shrink: 0;">
-            <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
-            <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
-            <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
+    <div id="editor-modal" class="hidden" style="position: fixed; top:0; left:0; width:100%; height:100%; background:#FFF; z-index:500; display: flex; flex-direction: column;">
+        
+        <div style="flex-shrink: 0; background: #FFF; z-index: 10; border-bottom: 1px solid #F0F0F0; box-shadow: 0 2px 10px rgba(0,0,0,0.02);">
+            <div style="padding: 15px 24px; display:flex; justify-content:space-between; align-items:center;">
+                <button id="btn-cancel-edit" style="background:none; border:none; color:#999; font-size:16px; cursor:pointer;">取消</button>
+                <h3 id="editor-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-main);">記錄好事</h3>
+                <button id="btn-save-edit" style="background:none; border:none; color:var(--primary); font-weight:700; font-size:16px; cursor:pointer;">儲存</button>
+            </div>
+            <div style="padding: 0 24px 15px 24px;">
+                <input id="input-title" type="text" placeholder="標題" autocomplete="off" name="gw-title-field" style="width:100%; padding:10px 0; border:none; font-size:24px; font-weight:700; outline:none; background:transparent; color:#333;">
+            </div>
         </div>
 
         <style>
@@ -57,10 +61,9 @@ function createEditorHTML() {
             select option { font-size: 17px; }
         </style>
 
-        <div style="flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column;">
-            <input id="input-title" type="text" placeholder="標題" autocomplete="off" name="gw-title-field" style="width:100%; padding:15px 0; border:none; border-bottom:1px solid #EEE; font-size:24px; font-weight:700; outline:none; background:transparent; color:#666; margin-bottom:10px;">
+        <div id="editor-scroll-area" style="flex:1; overflow-y:auto; padding:20px 24px 40px 24px; display:flex; flex-direction:column; -webkit-overflow-scrolling: touch;">
             
-            <textarea id="input-content" placeholder="內容" name="gw-content-field" style="width:100%; flex:1; min-height:250px; padding:15px 0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666;"></textarea>
+            <textarea id="input-content" placeholder="內容" name="gw-content-field" style="width:100%; min-height:300px; padding:0; border:none; font-size:18px; outline:none; resize:none; background:transparent; line-height:1.6; color:#666; margin-bottom: 20px; overflow:hidden;"></textarea>
             
             <div style="padding:10px 0; display:flex; justify-content:flex-end;">
                 <button id="btn-start-pk" style="display:none; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; padding:6px 20px; border-radius:50px; font-weight:700; font-size:14px; cursor:pointer;">開始PK</button>
@@ -93,8 +96,18 @@ function createEditorHTML() {
     const wrapper = document.getElementById('mobile-wrapper');
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', editorHTML);
-
-        // [修正] 改用 CSS position: fixed，移除 JS 計算以解決滑動顫抖問題
+        
+        // [新增] 自動延伸高度邏輯 (Auto Grow)
+        const textarea = document.getElementById('input-content');
+        if (textarea) {
+            const autoResize = () => {
+                textarea.style.height = 'auto'; // 先重置高度以計算縮小
+                textarea.style.height = textarea.scrollHeight + 'px'; // 再設為內容高度
+            };
+            textarea.addEventListener('input', autoResize);
+            // 掛載到全域供 openEditor 呼叫
+            window.resizeEditorContent = autoResize;
+        }
     }
 }
 
@@ -1630,6 +1643,13 @@ function openEditor(mode, data = null) {
     // [修正] 移除 JS 高度鎖定，改由 CSS (bottom:0) 自動適應鍵盤高度，確保標題不被推擠
     screens.editor.style.height = ''; 
     screens.editor.classList.remove('hidden');
+
+    // [新增] 若有定義自動調整函式，開啟時執行一次 (讓舊內容撐開高度)
+    if (window.resizeEditorContent) window.resizeEditorContent();
+    
+    // 強制滾動到最上方 (避免因為內容很長，開啟時直接在底部)
+    const scrollArea = document.getElementById('editor-scroll-area');
+    if(scrollArea) scrollArea.scrollTop = 0;
 }
 
 // --- 7.5 設定與垃圾桶功能 ---
