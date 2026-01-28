@@ -1627,6 +1627,8 @@ function openEditor(mode, data = null) {
     // 如果是編輯模式，還原下拉選單的值
     if(data) inputs.score.value = data.score;
 
+    // [修正] 移除 JS 高度鎖定，改由 CSS (bottom:0) 自動適應鍵盤高度，確保標題不被推擠
+    screens.editor.style.height = ''; 
     screens.editor.classList.remove('hidden');
 }
 
