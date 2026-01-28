@@ -308,6 +308,17 @@ function createPKScreenHTML() {
     const wrapper = document.getElementById('mobile-wrapper');
     if(wrapper) {
         wrapper.insertAdjacentHTML('beforeend', pkHTML);
+
+        // [新增] 自動校正浮動按鈕區域寬度 (扣除滾動條寬度，實現完美置中)
+        const chatHist = document.getElementById('chat-history');
+        const floatArea = document.getElementById('pk-floating-area');
+        if (chatHist && floatArea) {
+            const resizeObserver = new ResizeObserver(() => {
+                // clientWidth 屬性天生不包含滾動條寬度，這正是我們要的
+                floatArea.style.width = chatHist.clientWidth + 'px';
+            });
+            resizeObserver.observe(chatHist);
+        }
         
         // --- [修改] 展開箭頭邏輯 (自動長高延伸，父容器捲動) ---
         wrapper.querySelectorAll('.expand-arrow').forEach(arrow => {
