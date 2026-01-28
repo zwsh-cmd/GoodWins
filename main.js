@@ -2351,17 +2351,17 @@ async function loadWarehouseData(type) {
                 `;
             }
 
-            // [修改] 版面結構：標題/內容在一區，下方一列分為 左(等級/積分) 右(按鈕)
-            // [修正] 加入 white-space: pre-wrap 讓好事庫與鳥事庫的內容可以正確分段顯示
+            // [修正] 版面結構：標題/內容在一區，下方一列分為 左(等級/積分) 右(按鈕)
+            // [修正] 加入 white-space: pre-wrap 與 word-break: break-all 確保長英文與換行正常顯示
             const cardHTML = `
                 <div class="card-item" style="background: ${cardBg}; padding: 15px; border-radius: 12px; border: 1px solid #F0F0F0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; gap: 10px;">
                     <div style="width: 4px; background: ${iconColor}; border-radius: 2px;"></div>
-                    <div style="flex: 1; display:flex; flex-direction:column;">
+                    <div style="flex: 1; display:flex; flex-direction:column; min-width: 0;"> 
                         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="font-weight: 700; color: var(--text-main); font-size: 15px;">${displayTitle}</span>
-                            <span style="font-size: 12px; color: #BBB;">${date}</span>
+                            <span style="font-weight: 700; color: var(--text-main); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;">${displayTitle}</span>
+                            <span style="font-size: 12px; color: #BBB; flex-shrink: 0;">${date}</span>
                         </div>
-                        <div style="font-size: 13px; color: #666; line-height: 1.4; flex:1; white-space: pre-wrap;">${displayContent}</div>
+                        <div style="font-size: 13px; color: #666; line-height: 1.4; flex:1; white-space: pre-wrap; word-break: break-all;">${displayContent}</div>
                         
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid #F9F9F9;">
                             <div style="font-size: 12px; color: ${iconColor}; font-weight: 700;">${labelText}</div>
