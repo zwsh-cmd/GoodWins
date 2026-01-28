@@ -2086,14 +2086,19 @@ function createWarehouseHTML() {
                          await updateUserScore(-winScore);
 
                          if (data.originalBadId) {
-                             // [修正] 改用 getMyDoc
-                             const badRef = getMyDoc('bad_things', data.originalBadId);
-                             await updateDoc(badRef, {
-                                 isDefeated: false,
-                                 lastWinId: null,
-                                 chatLogs: [],
-                                 updatedAt: serverTimestamp()
-                             });
+                             try {
+                                 // [修正] 改用 getMyDoc
+                                 const badRef = getMyDoc('bad_things', data.originalBadId);
+                                 // [修正] 嘗試更新鳥事狀態，若鳥事已刪除則忽略錯誤(catch)，確保勝利卡能被刪除
+                                 await updateDoc(badRef, {
+                                     isDefeated: false,
+                                     lastWinId: null,
+                                     chatLogs: [],
+                                     updatedAt: serverTimestamp()
+                                 });
+                             } catch (e) {
+                                 console.warn("關聯鳥事已不存在或更新失敗，跳過並繼續刪除勝利卡", e);
+                             }
                          }
                      }
                      await moveToTrash('pk_wins', id);
@@ -2103,7 +2108,7 @@ function createWarehouseHTML() {
                 }
                 
                 btn.closest('.card-item').remove();
-                showSystemMessage("已移至垃圾桶");
+                // [修正] 移除 showSystemMessage("已移至垃圾桶");
 
             } else if (action === 'edit') {
                 const collectionName = type === 'good' ? 'good_things' : 'bad_things';
@@ -2381,7 +2386,8 @@ async function handlePKResult(winner) {
 
     if (winner === 'bad') {
         // --- 使用者選了鳥事 (戰中換牌) --- 按下卡片自動開始召喚，不顯示按鈕
-        addChatMessage('user', "還是覺得這件鳥事比較強...", true);
+        // [修正] 加入生氣 emoji
+        addChatMessage('user', "還是覺得這件鳥事比較強... 😠", true);
         addChatMessage('system', "收到。正在運用創意召喚新卡片進行對決。", true);
 
         // 重置標題與位階標題
