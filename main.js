@@ -291,7 +291,7 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 40px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 120px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
                 <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
@@ -401,6 +401,84 @@ function createPKScreenHTML() {
             await addChatMessage('user', text);
             inputChat.value = '';
             inputChat.style.height = 'auto'; // [修正] 發送後重置高度
+            
+            // [新增] 偵測「隨便選一張」或「換一張」意圖
+            const randomKeywords = ["隨便選", "隨機", "換一張", "選一張", "挑一張", "幫我選", "推薦一張"];
+            const isRandomIntent = randomKeywords.some(kw => text.includes(kw));
+
+            if (isRandomIntent && !currentPKContext.isVictory) {
+                addChatMessage('system', "收到指令。正在為您重新連結命運...", true);
+                
+                // 清空浮動區
+                const floatArea = document.getElementById('pk-floating-area');
+                floatArea.innerHTML = '';
+                
+                // 重置標題
+                document.getElementById('pk-good-title').innerText = "重新運算中...";
+                document.getElementById('pk-good-content').innerText = "AI 正在重新掃描好事庫...";
+                
+                try {
+                    const q = query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(1000));
+                    const querySnapshot = await getDocs(q);
+                    
+                    if (!querySnapshot.empty) {
+                        // 加入 Loading
+                        const loadingId = 'card-loading-' + Date.now();
+                        const chatHistory = document.getElementById('chat-history');
+                        const loadingDiv = document.createElement('div');
+                        loadingDiv.id = loadingId;
+                        loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic; margin-bottom: 10px;";
+                        loadingDiv.innerText = "正在分析戰局...";
+                        chatHistory.appendChild(loadingDiv);
+                        chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                        const updateStatus = (msg) => {
+                            const el = document.getElementById(loadingId);
+                            if(el) el.innerText = msg;
+                        };
+
+                        const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
+                        
+                        const el = document.getElementById(loadingId);
+                        if(el) el.remove();
+
+                        if (!newGood) {
+                             addChatMessage('system', "AI 暫時找不到其他更適合的好事卡。", true);
+                             return;
+                        }
+
+                        if (newGood.id) currentPKContext.shownGoodCardIds.push(newGood.id);
+                        currentPKContext.good = newGood;
+                        document.getElementById('pk-good-title').innerText = newGood.title;
+                        document.getElementById('pk-good-content').innerText = newGood.content;
+                        document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
+                        
+                        // 顯示「請說服我」按鈕
+                        const btnStyle = "display:block; margin:6px auto 15px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
+                        const btnChat = document.createElement('button');
+                        btnChat.innerText = "請說服我";
+                        btnChat.style.cssText = btnStyle;
+                        btnChat.onclick = async () => {
+                            btnChat.disabled = true;
+                            btnChat.innerText = "思考中...";
+                            // 提示詞：告知 AI 這是使用者要求重選的卡片，請解釋關聯
+                            const prompt = `【系統指令：使用者要求「${text}」。系統已重新選出好事（${newGood.title}）。請執行模式三：給出全新觀點，嘗試說服使用者這張卡片為何能破解鳥事。】`;
+                            const success = await callGeminiChat(prompt, true);
+                            if (success) btnChat.remove();
+                            else {
+                                btnChat.disabled = false;
+                                btnChat.innerText = "請說服我";
+                            }
+                        };
+                        floatArea.appendChild(btnChat);
+                    }
+                } catch(e) {
+                    console.error(e);
+                    addChatMessage('system', "選牌發生錯誤。", true);
+                }
+                return;
+            }
+
             await callGeminiChat(text);
         };
 
@@ -1076,8 +1154,8 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
         return scoreA - scoreB;
     });
 
-    // [修正] 限制數量：取前 50 張 (包含所有低分卡與部分高分卡)，避免全域掃描時 Token 超過限制
-    const finalCandidates = availableDocs.slice(0, 50);
+    // [修正] 解除數量限制：掃描所有卡片，以確保最佳判斷 (AI Context Window 足夠大)
+    const finalCandidates = availableDocs;
 
     // 製作給 AI 看的資料 (保留原始結構)
     const aiInputCandidates = finalCandidates.map(doc => ({
@@ -1187,6 +1265,19 @@ async function startPK(data, collectionSource, options = {}) {
         shownGoodCardIds: [], // [新增] 紀錄本場對話出現過的好事卡 ID
         excludeTitles: []     // [新增] 紀錄歷史勝利的好事卡標題
     };
+
+    // [新增] 1. 解析歷史對話，找出過去曾經被淘汰或出現過的好事卡標題，加入排除清單 (避免重複)
+    if (data.chatLogs && Array.isArray(data.chatLogs)) {
+        data.chatLogs.forEach(log => {
+             if (log.role === 'system') {
+                 // 匹配 "已淘汰「...」" 或 "新好事卡為（...）"
+                 const m1 = log.text.match(/已淘汰「(.*?)」/);
+                 if (m1) currentPKContext.shownGoodCardIds.push(m1[1]);
+                 const m2 = log.text.match(/新好事卡為（(.*?)）/);
+                 if (m2) currentPKContext.shownGoodCardIds.push(m2[1]);
+             }
+        });
+    }
 
     if (collectionSource === 'pk_wins') {
         // --- 勝利回顧模式 (純瀏覽，不觸發 AI) ---
