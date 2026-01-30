@@ -466,7 +466,7 @@ function createPKScreenHTML() {
                     currentPKContext.shownGoodCardIds = [];
 
                     // [修正] 4. 自動流程：顯示訊息並自動抽卡
-                    addChatMessage('system', "重新開啟戰局", true);
+                    addChatMessage('system', "重新開啟戰場", true);
                     
                     // 5. 插入浮動手動按鈕區域 (改為自動執行)
                     const floatArea = document.getElementById('pk-floating-area');
@@ -1210,7 +1210,7 @@ async function startPK(data, collectionSource, options = {}) {
 
         // [修正] 根據進入點顯示不同開場白 (自動流程)
         if (options.isReDefeat) {
-            addChatMessage('system', "重新開啟戰局", true);
+            addChatMessage('system', "重新開啟戰場", true);
         } else {
             addChatMessage('system', "繼續進攻，AI正在抽出好事卡", true);
         }
@@ -2443,6 +2443,10 @@ async function handlePKResult(winner) {
     currentPKContext.isVictory = true;
     const btnRePk = document.getElementById('btn-re-pk');
     if(btnRePk) btnRePk.style.display = 'flex'; 
+    
+    // [修正] 勝利後，強制移除「請說服我」按鈕
+    const floatArea = document.getElementById('pk-floating-area');
+    if(floatArea) floatArea.innerHTML = '';
 
     // 1. 計算積分
     // [修正] 嚴格落實計分邏輯：若以弱勝強，得分為鳥事分數加上兩者間的位階差
