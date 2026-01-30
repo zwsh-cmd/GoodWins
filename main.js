@@ -466,7 +466,7 @@ function createPKScreenHTML() {
                     currentPKContext.shownGoodCardIds = [];
 
                     // [修正] 4. 自動流程：顯示訊息並自動抽卡
-                    addChatMessage('system', "重新開啟戰場", true);
+                    addChatMessage('system', "———— 重新開啟戰局 ————", true);
                     
                     // 5. 插入浮動手動按鈕區域 (改為自動執行)
                     const floatArea = document.getElementById('pk-floating-area');
@@ -972,6 +972,10 @@ async function handleSaveContent(shouldStartPK = false) {
                 // 由於已經 replaceState 為 warehouse，再 startPK (pushState pk)，
                 // 歷史堆疊會變成 Home -> Warehouse -> PK。
                 // 且因為上面已經 loadWarehouseData('bad')，按離開回頭時，popstate 會讀到正確的 Tab 狀態。
+                
+                // [新增] 必須隱藏倉庫 modal，因為倉庫 Z-index(200) 高於 PK(100)，不隱藏會導致 PK 畫面被蓋住
+                if (screens.warehouse) screens.warehouse.classList.add('hidden');
+
                 startPK({ 
                     id: targetId, 
                     title, 
@@ -1210,7 +1214,7 @@ async function startPK(data, collectionSource, options = {}) {
 
         // [修正] 根據進入點顯示不同開場白 (自動流程)
         if (options.isReDefeat) {
-            addChatMessage('system', "重新開啟戰場", true);
+            addChatMessage('system', "———— 重新開啟戰局 ————", true);
         } else {
             addChatMessage('system', "繼續進攻，AI正在抽出好事卡", true);
         }
@@ -2109,7 +2113,7 @@ function createWarehouseHTML() {
                     openEditor(type === 'good' ? 'good' : 'bad', { id: docSnap.id, ...docSnap.data() });
                 }
             } else if (action === 'defeat') {
-                document.getElementById('warehouse-modal').classList.add('hidden');
+                // [修改] 移除這裡的 hidden，改在資料讀取完畢後再隱藏，避免等待時閃現首頁
                 
                 if (winId) {
                     // [修改] 再擊敗邏輯：使用 getMyDoc
@@ -2128,6 +2132,7 @@ function createWarehouseHTML() {
                             await updateUserScore(-oldScore);
                         }
 
+                        document.getElementById('warehouse-modal').classList.add('hidden'); // [移至此處]
                         startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things', { 
                             isReDefeat: true, 
                             excludeGoodTitle: excludeTitle,
@@ -2140,6 +2145,7 @@ function createWarehouseHTML() {
                 // [修正] 改用 getMyDoc
                 const docSnap = await getDoc(getMyDoc('bad_things', id));
                 if (docSnap.exists()) {
+                    document.getElementById('warehouse-modal').classList.add('hidden'); // [移至此處]
                     startPK({ id: docSnap.id, ...docSnap.data() }, 'bad_things');
                 }
 
