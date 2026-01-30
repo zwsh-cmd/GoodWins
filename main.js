@@ -1328,21 +1328,25 @@ async function startPK(data, collectionSource, options = {}) {
 
                     // [新增] 按鈕容器 (水平排列，置中)
                     const btnContainer = document.createElement('div');
-                    btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center;";
+                    btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; padding: 0 10px;";
+
+                    // 統一樣式：移除 margin:auto, 加入 flex:1
+                    const sharedBtnStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out; text-align:center;";
 
                     // 1. 請說服我按鈕
                     const btnChat = document.createElement('button');
                     btnChat.innerText = "請說服我";
-                    btnChat.style.cssText = btnStyle;
+                    btnChat.style.cssText = sharedBtnStyle;
                     
-                    // 2. 隨機選出按鈕 (黃綠色，常駐)
+                    // 2. 隨機選出按鈕 (樣式統一，邏輯改為真隨機)
                     const btnRandom = document.createElement('button');
                     btnRandom.innerText = "隨機選出";
-                    // 介於鼠尾草綠和淺黃色之間的顏色 (#F0F4C3 背景, #827717 文字/框)
-                    btnRandom.style.cssText = "padding:6px 16px; background:#F0F4C3; color:#827717; border:1.5px solid #827717; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(130,119,23,0.1); flex-shrink:0;";
+                    btnRandom.style.cssText = sharedBtnStyle;
+
                     btnRandom.onclick = () => {
                         if(btnRandom.disabled) return;
-                        handlePKResult('bad', true); // 呼叫選牌邏輯
+                        // 參數3: true 代表使用真隨機 (不透過 AI)
+                        handlePKResult('bad', true, true); 
                     };
 
                     btnChat.onclick = async () => {
@@ -1358,7 +1362,7 @@ async function startPK(data, collectionSource, options = {}) {
                         }
 
                         if (success) {
-                            btnChat.remove(); // 移除說服按鈕，隨機按鈕自動置中
+                            btnChat.remove(); // 移除說服按鈕
                             btnRandom.disabled = false;
                         } else {
                             btnChat.disabled = false;
@@ -2488,8 +2492,8 @@ async function loadWarehouseData(type) {
 
 // --- 9. PK 邏輯與積分系統 ---
 
-// [修正] 增加 isCustomInput 參數，若為 true 則不顯示預設的抱怨訊息 (因為使用者已經輸入了自訂指令)
-async function handlePKResult(winner, isCustomInput = false) {
+// [修正] 增加 isCustomInput 與 useTrueRandom 參數
+async function handlePKResult(winner, isCustomInput = false, useTrueRandom = false) {
     if (!currentUser) {
         showSystemMessage("請先登入才能紀錄 PK 結果！");
         return;
@@ -2537,14 +2541,41 @@ async function handlePKResult(winner, isCustomInput = false) {
                         if(el) el.innerText = msg;
                 };
 
-                const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
+                let newGood = null;
+
+                if (useTrueRandom) {
+                    // --- 純系統隨機模式 (不透過 AI) ---
+                    // 1. 過濾掉已顯示過的卡片
+                    const candidates = querySnapshot.docs.filter(doc => !currentPKContext.shownGoodCardIds.includes(doc.id));
+                    
+                    if (candidates.length > 0) {
+                        // 2. 隨機選出一張
+                        const randomIndex = Math.floor(Math.random() * candidates.length);
+                        const selectedDoc = candidates[randomIndex];
+                        newGood = { id: selectedDoc.id, ...selectedDoc.data() };
+                        
+                        // 模擬一點點延遲，讓體驗更自然
+                        await new Promise(r => setTimeout(r, 600));
+                    } else {
+                        // 如果全部都抽完了，清空紀錄重新來過，或放寬限制 (這裡選擇回傳 null 讓下面處理)
+                        newGood = null;
+                    }
+
+                } else {
+                    // --- AI 推薦模式 ---
+                    newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
+                }
                 
                 // 移除 Loading
                 const el = document.getElementById(loadingId);
                 if(el) el.remove();
                 
                 if (!newGood) {
-                    addChatMessage('system', "AI 正在深度思考創意連結，請重新點擊鳥事卡嘗試。", true);
+                    if (useTrueRandom) {
+                        addChatMessage('system', "倉庫裡的好事卡都用過一輪囉！無法再隨機選出了。", true);
+                    } else {
+                        addChatMessage('system', "AI 正在深度思考創意連結，請重新點擊鳥事卡嘗試。", true);
+                    }
                     return;
                 }
 
@@ -2555,30 +2586,34 @@ async function handlePKResult(winner, isCustomInput = false) {
                 // [修正] 選定新卡後恢復位階顯示
                 document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
 
-                // 直接顯示說服按鈕
-                const btnStyle = "padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out; flex-shrink:0;";
-                
                 // [新增] 按鈕容器
                 const btnContainer = document.createElement('div');
-                btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; margin-bottom:15px;";
+                btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; margin-bottom:15px; padding:0 10px;";
+
+                // 統一樣式
+                const sharedBtnStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out; text-align:center;";
 
                 const btnChat = document.createElement('button');
                 btnChat.innerText = "請說服我";
-                btnChat.style.cssText = btnStyle;
+                btnChat.style.cssText = sharedBtnStyle;
 
-                // [新增] 隨機選出按鈕
+                // 隨機選出按鈕 (與上面一致)
                 const btnRandom = document.createElement('button');
                 btnRandom.innerText = "隨機選出";
-                btnRandom.style.cssText = "padding:6px 16px; background:#F0F4C3; color:#827717; border:1.5px solid #827717; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(130,119,23,0.1); flex-shrink:0;";
+                btnRandom.style.cssText = sharedBtnStyle;
+
                 btnRandom.onclick = () => {
                     if(btnRandom.disabled) return;
-                    handlePKResult('bad', true);
+                    // 參數3: true 代表使用真隨機
+                    handlePKResult('bad', true, true);
                 };
 
                 btnChat.onclick = async () => {
                     btnChat.disabled = true;
                     btnRandom.disabled = true;
                     btnChat.innerText = "思考中...";
+                    
+                    // 這裡的 Prompt 會引導 AI 針對「這張隨機選出的卡」進行說服
                     const prompt = `【系統指令：使用者判定鳥事勝出。系統已選出新好事（${newGood.title}）。請執行模式三：給出全新觀點，嘗試再次說服。】`;
                     
                     const success = await callGeminiChat(prompt, true);
