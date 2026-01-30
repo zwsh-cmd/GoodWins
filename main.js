@@ -402,17 +402,6 @@ function createPKScreenHTML() {
             inputChat.value = '';
             inputChat.style.height = 'auto'; // [修正] 發送後重置高度
             
-            // [新增] 偵測「隨便選一張」或「換一張」意圖
-            const randomKeywords = ["隨便選", "隨機", "換一張", "選一張", "挑一張", "幫我選", "推薦一張"];
-            const isRandomIntent = randomKeywords.some(kw => text.includes(kw));
-
-            if (isRandomIntent && !currentPKContext.isVictory) {
-                // [修正] 直接呼叫鳥事勝出流程 (帶入 true 參數表示為自訂指令，不顯示憤怒 Emoji)
-                // 這會自動執行：顯示提示 -> Loading -> 選牌 -> 顯示卡片 -> 出現「請說服我」按鈕
-                handlePKResult('bad', true); 
-                return;
-            }
-
             await callGeminiChat(text);
         };
 
@@ -524,21 +513,41 @@ function createPKScreenHTML() {
                                 document.getElementById('pk-good-content').innerText = newGood.content;
                                 document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
                                 
+                                // [新增] 按鈕容器
+                                const btnContainer = document.createElement('div');
+                                btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center;";
+
                                 const btnChat = document.createElement('button');
                                 btnChat.innerText = "請說服我";
                                 btnChat.style.cssText = btnStyle;
+
+                                // [新增] 隨機選出按鈕
+                                const btnRandom = document.createElement('button');
+                                btnRandom.innerText = "隨機選出";
+                                btnRandom.style.cssText = "padding:6px 16px; background:#F0F4C3; color:#827717; border:1.5px solid #827717; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(130,119,23,0.1); flex-shrink:0;";
+                                btnRandom.onclick = () => {
+                                    if(btnRandom.disabled) return;
+                                    handlePKResult('bad', true);
+                                };
+
                                 btnChat.onclick = async () => {
                                     btnChat.disabled = true;
+                                    btnRandom.disabled = true;
                                     btnChat.innerText = "思考中...";
                                     const success = await callGeminiChat(`【系統指令：忽略舊結果。新好事卡為（${newGood.title}）。請開始價值辯論。】`, true);
                                     if(success) {
                                         btnChat.remove();
+                                        btnRandom.disabled = false;
                                     } else {
                                         btnChat.disabled = false;
+                                        btnRandom.disabled = false;
                                         btnChat.innerText = "請說服我";
                                     }
                                 };
-                                floatArea.appendChild(btnChat);
+
+                                btnContainer.appendChild(btnChat);
+                                btnContainer.appendChild(btnRandom);
+                                floatArea.appendChild(btnContainer);
                             } else {
                                 addChatMessage('system', "倉庫裡還沒有好事卡喔！", true);
                             }
@@ -1317,11 +1326,28 @@ async function startPK(data, collectionSource, options = {}) {
                     document.getElementById('pk-good-content').innerText = selectedGoodThing.content;
                     document.getElementById('pk-good-header').innerText = `好事 (Lv.${selectedGoodThing.score || 1})`;
 
+                    // [新增] 按鈕容器 (水平排列，置中)
+                    const btnContainer = document.createElement('div');
+                    btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center;";
+
+                    // 1. 請說服我按鈕
                     const btnChat = document.createElement('button');
                     btnChat.innerText = "請說服我";
                     btnChat.style.cssText = btnStyle;
+                    
+                    // 2. 隨機選出按鈕 (黃綠色，常駐)
+                    const btnRandom = document.createElement('button');
+                    btnRandom.innerText = "隨機選出";
+                    // 介於鼠尾草綠和淺黃色之間的顏色 (#F0F4C3 背景, #827717 文字/框)
+                    btnRandom.style.cssText = "padding:6px 16px; background:#F0F4C3; color:#827717; border:1.5px solid #827717; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(130,119,23,0.1); flex-shrink:0;";
+                    btnRandom.onclick = () => {
+                        if(btnRandom.disabled) return;
+                        handlePKResult('bad', true); // 呼叫選牌邏輯
+                    };
+
                     btnChat.onclick = async () => {
                         btnChat.disabled = true;
+                        btnRandom.disabled = true; // 思考時鎖定隨機按鈕
                         btnChat.innerText = "思考中...";
                         
                         let success = false;
@@ -1332,13 +1358,18 @@ async function startPK(data, collectionSource, options = {}) {
                         }
 
                         if (success) {
-                            btnChat.remove();
+                            btnChat.remove(); // 移除說服按鈕，隨機按鈕自動置中
+                            btnRandom.disabled = false;
                         } else {
                             btnChat.disabled = false;
+                            btnRandom.disabled = false;
                             btnChat.innerText = "請說服我";
                         }
                     };
-                    floatArea.appendChild(btnChat);
+
+                    btnContainer.appendChild(btnChat);
+                    btnContainer.appendChild(btnRandom);
+                    floatArea.appendChild(btnContainer);
                 } else {
                     addChatMessage('system', "倉庫裡還沒有好事卡喔，先去記錄幾件好事吧！", true);
                 }
@@ -2525,25 +2556,45 @@ async function handlePKResult(winner, isCustomInput = false) {
                 document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
 
                 // 直接顯示說服按鈕
-                const btnStyle = "display:block; margin:6px auto 15px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
+                const btnStyle = "padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out; flex-shrink:0;";
+                
+                // [新增] 按鈕容器
+                const btnContainer = document.createElement('div');
+                btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; margin-bottom:15px;";
+
                 const btnChat = document.createElement('button');
                 btnChat.innerText = "請說服我";
                 btnChat.style.cssText = btnStyle;
+
+                // [新增] 隨機選出按鈕
+                const btnRandom = document.createElement('button');
+                btnRandom.innerText = "隨機選出";
+                btnRandom.style.cssText = "padding:6px 16px; background:#F0F4C3; color:#827717; border:1.5px solid #827717; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(130,119,23,0.1); flex-shrink:0;";
+                btnRandom.onclick = () => {
+                    if(btnRandom.disabled) return;
+                    handlePKResult('bad', true);
+                };
+
                 btnChat.onclick = async () => {
                     btnChat.disabled = true;
+                    btnRandom.disabled = true;
                     btnChat.innerText = "思考中...";
                     const prompt = `【系統指令：使用者判定鳥事勝出。系統已選出新好事（${newGood.title}）。請執行模式三：給出全新觀點，嘗試再次說服。】`;
                     
-                    // [修正] 檢查回傳值，失敗則變回原本文字
                     const success = await callGeminiChat(prompt, true);
                     if (success) {
                         btnChat.remove();
+                        btnRandom.disabled = false;
                     } else {
                         btnChat.disabled = false;
+                        btnRandom.disabled = false;
                         btnChat.innerText = "請說服我";
                     }
                 };
-                floatArea.appendChild(btnChat);
+
+                btnContainer.appendChild(btnChat);
+                btnContainer.appendChild(btnRandom);
+                floatArea.appendChild(btnContainer);
             }
         } catch (e) { 
             console.error(e);
