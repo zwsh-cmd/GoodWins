@@ -481,7 +481,27 @@ function createPKScreenHTML() {
                             const q = query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(1000));
                             const querySnapshot = await getDocs(q);
                             if (!querySnapshot.empty) {
-                                const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
+                                // [新增] Loading UI
+                                const loadingId = 'card-loading-' + Date.now();
+                                const chatHistory = document.getElementById('chat-history');
+                                const loadingDiv = document.createElement('div');
+                                loadingDiv.id = loadingId;
+                                loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic; margin-bottom: 10px;";
+                                loadingDiv.innerText = "正在分析戰局...";
+                                chatHistory.appendChild(loadingDiv);
+                                chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                                const updateStatus = (msg) => {
+                                        const el = document.getElementById(loadingId);
+                                        if(el) el.innerText = msg;
+                                };
+
+                                const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
+                                
+                                // 移除 Loading
+                                const el = document.getElementById(loadingId);
+                                if(el) el.remove();
+
                                 if (!newGood || newGood === "AI_FAILED") {
                                     addChatMessage('system', "AI 暫時找不到適合的好事卡，請稍後再試。", true);
                                     return;
@@ -1030,7 +1050,8 @@ let currentPKContext = { bad: null, good: null };
 
 // [修正] AI 智慧選牌模組：全域審視 (Global Evaluation)
 // 目的：要求 AI 閱讀完整份清單，綜合評估「有效性」與「分數成本」後做出最佳決策，但保留原始 Prompt 靈魂。
-async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
+// [修正] 增加 statusCallback 參數用於回報連線進度
+async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCallback = null) {
     const apiKey = sessionStorage.getItem('gemini_key');
     if (!apiKey || candidateDocs.length === 0) return null;
 
@@ -1105,8 +1126,9 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = []) {
         try {
             // --- 監控：紀錄選牌 API 發送 ---
             window.apiCallCount++;
-            console.warn(`[監控] 準備發送 API (選牌)！目前累積發送 ${window.apiCallCount} 次`);
-            console.log(`[選牌] 嘗試使用：${model.id}`);
+            const statusMsg = `嘗試連線AI模型：${model.id}...`;
+            console.warn(`[監控] ${statusMsg} (累積發送 ${window.apiCallCount} 次)`);
+            if (statusCallback) statusCallback(statusMsg);
 
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
                 method: 'POST',
@@ -1230,7 +1252,28 @@ async function startPK(data, collectionSource, options = {}) {
                 // [修正] 改用 getMyCollection
                 const querySnapshot = await getDocs(query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(1000)));
                 if (!querySnapshot.empty) {
-                    const selectedGoodThing = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
+                    // [新增] 建立 Loading UI
+                    const loadingId = 'card-loading-' + Date.now();
+                    const chatHistory = document.getElementById('chat-history');
+                    const loadingDiv = document.createElement('div');
+                    loadingDiv.id = loadingId;
+                    loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic; margin-bottom: 10px;";
+                    loadingDiv.innerText = "正在分析戰局...";
+                    chatHistory.appendChild(loadingDiv);
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                    // 定義進度更新 callback
+                    const updateStatus = (msg) => {
+                        const el = document.getElementById(loadingId);
+                        if(el) el.innerText = msg;
+                    };
+
+                    const selectedGoodThing = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
+                    
+                    // 取得結果後移除 Loading
+                    const el = document.getElementById(loadingId);
+                    if(el) el.remove();
+
                     if (!selectedGoodThing || selectedGoodThing === "AI_FAILED") {
                         addChatMessage('system', "AI 暫時找不到適合的好事卡，請稍後再試。", true);
                         return;
@@ -1436,7 +1479,8 @@ ${goodText}
                 console.warn(`[監控] 準備發送 API (對話)！目前累積發送 ${window.apiCallCount} 次`);
 
                 console.log(`[聊天] 嘗試連線模型: ${model.id} ...`);
-                updateLoadingMsg(`嘗試連線 AI 模型 (${model.id})...`);
+                // [修正] 統一提示詞格式
+                updateLoadingMsg(`嘗試連線AI模型：${model.id}...`);
                 
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
                     method: 'POST',
@@ -2384,10 +2428,11 @@ async function handlePKResult(winner) {
     if (winner === 'bad') {
         // --- 使用者選了鳥事 (戰中換牌) --- 按下卡片自動開始召喚，不顯示按鈕
         // [修正] 加入生氣 emoji
-        addChatMessage('user', "還是覺得這件鳥事比較強... 😠", true);
+        addChatMessage('user', "還是覺得這件鳥事比較強... 😤", true);
         
         const defeatedTitle = currentPKContext.good?.title || "未知好事";
-        addChatMessage('system', `收到。已淘汰「${defeatedTitle}」。\n正在運用創意召喚新卡片進行對決。`, true);
+        // [修正] 修改文字並支援 Loading
+        addChatMessage('system', `收到。「${defeatedTitle}」暫時落敗。\n正在運用創意召喚新卡片進行對決。`, true);
 
         // 重置標題與位階標題
         document.getElementById('pk-good-title').innerText = "重新部署中...";
@@ -2403,7 +2448,27 @@ async function handlePKResult(winner) {
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
                 if (currentPKContext.good?.id) currentPKContext.shownGoodCardIds.push(currentPKContext.good.id);
-                const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds);
+                
+                // [新增] Loading UI
+                const loadingId = 'card-loading-' + Date.now();
+                const chatHistory = document.getElementById('chat-history');
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = loadingId;
+                loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic; margin-bottom: 10px;";
+                loadingDiv.innerText = "正在分析戰局...";
+                chatHistory.appendChild(loadingDiv);
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                const updateStatus = (msg) => {
+                        const el = document.getElementById(loadingId);
+                        if(el) el.innerText = msg;
+                };
+
+                const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
+                
+                // 移除 Loading
+                const el = document.getElementById(loadingId);
+                if(el) el.remove();
                 
                 if (!newGood) {
                     addChatMessage('system', "AI 正在深度思考創意連結，請重新點擊鳥事卡嘗試。", true);
@@ -2440,7 +2505,7 @@ async function handlePKResult(winner) {
             }
         } catch (e) { 
             console.error(e);
-            addChatMessage('system', "選牌失敗，請重新點擊鳥事卡重試。", true);
+            addChatMessage('system', "暫時無法選出合適的好事卡，請重新點擊鳥事卡再試一次。", true);
         }
         return;
     }
