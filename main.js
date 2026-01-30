@@ -442,7 +442,7 @@ function createPKScreenHTML() {
         const btnRePK = document.getElementById('btn-re-pk');
         if(btnRePK) {
             btnRePK.addEventListener('click', async () => {
-                const confirmed = await showConfirmMessage("確定要重新發起 PK 挑戰嗎？（將扣除原本贏得的分數）", "重新開啟戰場", "取消");
+                const confirmed = await showConfirmMessage("確定要重新發起 PK 挑戰嗎？（將扣除原本贏得的分數）", "重新開啟戰局", "取消");
                 if(confirmed) {
                     // 1. 扣除之前贏的分數
                     if(currentPKContext.pointsToDeduct > 0) {
@@ -1216,7 +1216,7 @@ async function startPK(data, collectionSource, options = {}) {
         if (options.isReDefeat) {
             addChatMessage('system', "———— 重新開啟戰局 ————", true);
         } else {
-            addChatMessage('system', "繼續進攻，AI正在抽出好事卡", true);
+            addChatMessage('system', "———— 繼續進攻，AI正在抽出好事卡 ————", true);
         }
 
         const floatArea = document.getElementById('pk-floating-area');
@@ -2385,7 +2385,9 @@ async function handlePKResult(winner) {
         // --- 使用者選了鳥事 (戰中換牌) --- 按下卡片自動開始召喚，不顯示按鈕
         // [修正] 加入生氣 emoji
         addChatMessage('user', "還是覺得這件鳥事比較強... 😠", true);
-        addChatMessage('system', "收到。正在運用創意召喚新卡片進行對決。", true);
+        
+        const defeatedTitle = currentPKContext.good?.title || "未知好事";
+        addChatMessage('system', `收到。已淘汰「${defeatedTitle}」。\n正在運用創意召喚新卡片進行對決。`, true);
 
         // 重置標題與位階標題
         document.getElementById('pk-good-title').innerText = "重新部署中...";
