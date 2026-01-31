@@ -184,8 +184,8 @@ function createGlobalComponents() {
             <div style="background: #FFF; width: 80%; max-width: 300px; padding: 24px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; display: flex; flex-direction: column; gap: 16px;">
                 <div id="confirm-msg" style="font-size: 15px; color: var(--text-main); line-height: 1.6; white-space: pre-line; font-weight:bold;"></div>
                 <div style="display:flex; gap:10px;">
-                    <button id="btn-confirm-cancel" style="flex:1; background: #F5F5F5; color: #666; border: none; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;">取消</button>
-                    <button id="btn-confirm-ok" style="flex:1; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;">確定</button>
+                    <button id="btn-confirm-cancel" style="flex:1; background: #F5F5F5; color: #666; border: none; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; white-space: pre-line;">取消</button>
+                    <button id="btn-confirm-ok" style="flex:1; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; white-space: pre-line;">確定</button>
                 </div>
             </div>
         </div>
@@ -291,7 +291,7 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 120px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 85px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
                 <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
@@ -443,7 +443,7 @@ function createPKScreenHTML() {
         const btnRePK = document.getElementById('btn-re-pk');
         if(btnRePK) {
             btnRePK.addEventListener('click', async () => {
-                const confirmed = await showConfirmMessage("確定要重新發起 PK 挑戰嗎？（將扣除原本贏得的分數）", "重新開啟戰局", "取消");
+                const confirmed = await showConfirmMessage("確定要重新發起 PK 挑戰嗎？\n（將扣除原本贏得的分數）", "重新開啟戰局", "取消");
                 if(confirmed) {
                     // 1. 扣除之前贏的分數
                     if(currentPKContext.pointsToDeduct > 0) {
@@ -598,6 +598,7 @@ document.getElementById('btn-clear-chat')?.addEventListener('click', async () =>
             const docRef = getMyDoc(currentPKContext.collection, currentPKContext.docId);
             await updateDoc(docRef, { chatLogs: [] });
             currentPKContext.chatLogs = [];
+            currentPKContext.shownGoodCardIds = []; // [修正] 清空對話同時重置抽卡記憶
             document.getElementById('chat-history').innerHTML = '';
             showSystemMessage("對話紀錄已清空");
         } catch(e) { console.error(e); }
@@ -849,8 +850,8 @@ if(btnExitPK) {
                     await deleteDoc(getMyDoc('pk_wins', currentPKContext.winId));
                 }
                 
-                showSystemMessage("挑戰未完成，鳥事已回歸待擊敗狀態。");
-            } 
+                showSystemMessage("挑戰未完成，\n鳥事已回歸待擊敗狀態。");
+            }
             else if (currentPKContext.collection === 'bad_things' && currentPKContext.docId) {
                 // 一般 PK 中途離開，只更新對話與時間 [修正] 改用 getMyDoc
                 const docRef = getMyDoc('bad_things', currentPKContext.docId);
@@ -973,7 +974,7 @@ async function handleSaveContent(shouldStartPK = false) {
         
         // [新增] 編輯模式下，詢問是否覆蓋或另存
         if (targetId) {
-            const isOverwrite = await showConfirmMessage("卡片已經修改，是否另存為新的卡片？\n或者合併舊卡片的紀錄？", "合併舊卡 (保留紀錄)", "另存新卡");
+            const isOverwrite = await showConfirmMessage("卡片已經修改，另存為新的卡片？\n或者合併舊卡片的紀錄？", "合併舊卡\n(保留PK紀錄)", "另存新卡");
             if (!isOverwrite) {
                 targetId = null; // 設為 null，後續邏輯會自動進入「新增模式」
             }
@@ -2277,7 +2278,7 @@ function createWarehouseHTML() {
                 
                 if (winId) {
                     // [新增] 點選「再擊敗」時的確認視窗 (視為開啟新戰局)
-                    const confirmed = await showConfirmMessage("確定要重新發起 PK 挑戰嗎？（將扣除原本贏得的分數）", "重新開啟戰局", "取消");
+                    const confirmed = await showConfirmMessage("確定要重新發起 PK 挑戰嗎？\n（將扣除原本贏得的分數）", "重新開啟戰局", "取消");
                     if (!confirmed) return;
 
                     // [修改] 再擊敗邏輯：使用 getMyDoc
