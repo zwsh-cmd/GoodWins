@@ -151,9 +151,9 @@ function createGlobalComponents() {
             background-color: #FAFAFA;   /* 確保背景色一致 */
         }
         @keyframes pulse-btn {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.7; transform: scale(0.98); }
-            100% { opacity: 1; transform: scale(1); }
+            0% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 rgba(251,192,45,0); }
+            50% { opacity: 0.8; transform: scale(0.95); box-shadow: 0 0 15px rgba(251,192,45,0.6); }
+            100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 rgba(251,192,45,0); }
         }
     `;
     document.head.appendChild(globalStyle);
@@ -1380,16 +1380,16 @@ async function startPK(data, collectionSource, options = {}) {
                     btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; padding: 0 10px;";
 
                     // 統一樣式：移除 margin:auto, 加入 flex:1
-                    const sharedBtnStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out; text-align:center;";
+                    const sharedBtnStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 0.8s infinite ease-in-out; text-align:center;";
 
-                    // 1. 請說服我按鈕
+                    // 1. 請說服我按鈕 (將放在右邊)
                     const btnChat = document.createElement('button');
                     btnChat.innerText = "請說服我";
                     btnChat.style.cssText = sharedBtnStyle;
                     
-                    // 2. 隨機選出按鈕 (樣式統一，邏輯改為真隨機)
+                    // 2. 隨機抽卡按鈕 (將放在左邊)
                     const btnRandom = document.createElement('button');
-                    btnRandom.innerText = "隨機選出";
+                    btnRandom.innerText = "隨機抽卡";
                     btnRandom.style.cssText = sharedBtnStyle;
 
                     btnRandom.onclick = () => {
@@ -1399,29 +1399,44 @@ async function startPK(data, collectionSource, options = {}) {
                     };
 
                     btnChat.onclick = async () => {
+                        const isRePersuade = btnChat.innerText === "再說服我";
+                        
                         btnChat.disabled = true;
                         btnRandom.disabled = true; // 思考時鎖定隨機按鈕
+                        const originalText = btnChat.innerText;
                         btnChat.innerText = "思考中...";
                         
                         let success = false;
-                        if (currentPKContext.chatLogs.length > 0) {
-                            success = await callGeminiChat(`【系統指令：忽略舊結果。新好事卡為（${selectedGoodThing.title}）。請開始價值辯論。】`, true);
+                        let prompt = "";
+
+                        if (isRePersuade) {
+                            // [再說服我] 針對同一張卡片，要求不同觀點
+                            prompt = `【系統指令：使用者對目前的說法還不夠滿意。針對同一張好事卡（${selectedGoodThing.title}），請切換一個完全不同的角度，再次嘗試說服使用者這張牌為何能扭轉鳥事。】`;
                         } else {
-                            success = await callGeminiChat("【系統指令：PK 開始。策略選牌完成，進行價值辯論。】", true);
+                            // [初次說服]
+                            if (currentPKContext.chatLogs.length > 0) {
+                                prompt = `【系統指令：忽略舊結果。新好事卡為（${selectedGoodThing.title}）。請開始價值辯論。】`;
+                            } else {
+                                prompt = "【系統指令：PK 開始。策略選牌完成，進行價值辯論。】";
+                            }
                         }
 
+                        success = await callGeminiChat(prompt, true);
+
                         if (success) {
-                            btnChat.remove(); // 移除說服按鈕
-                            btnRandom.disabled = false;
+                            btnChat.innerText = "再說服我"; // 變更文字
+                            btnChat.disabled = false;     // 常駐：重新啟用
+                            btnRandom.disabled = false;   // 常駐：重新啟用
                         } else {
                             btnChat.disabled = false;
                             btnRandom.disabled = false;
-                            btnChat.innerText = "請說服我";
+                            btnChat.innerText = originalText;
                         }
                     };
 
-                    btnContainer.appendChild(btnChat);
+                    // [修正] 位置交換：隨機抽卡在左，請說服我在右
                     btnContainer.appendChild(btnRandom);
+                    btnContainer.appendChild(btnChat);
                     floatArea.appendChild(btnContainer);
                 } else {
                     addChatMessage('system', "倉庫裡還沒有好事卡喔，先去記錄幾件好事吧！", true);
@@ -2649,15 +2664,15 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                 btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; margin-bottom:15px; padding:0 10px;";
 
                 // 統一樣式
-                const sharedBtnStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out; text-align:center;";
+                const sharedBtnStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 0.8s infinite ease-in-out; text-align:center;";
 
                 const btnChat = document.createElement('button');
                 btnChat.innerText = "請說服我";
                 btnChat.style.cssText = sharedBtnStyle;
 
-                // 隨機選出按鈕 (與上面一致)
+                // 隨機抽卡按鈕 (與上面一致)
                 const btnRandom = document.createElement('button');
-                btnRandom.innerText = "隨機選出";
+                btnRandom.innerText = "隨機抽卡";
                 btnRandom.style.cssText = sharedBtnStyle;
 
                 btnRandom.onclick = () => {
@@ -2667,26 +2682,38 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                 };
 
                 btnChat.onclick = async () => {
+                    const isRePersuade = btnChat.innerText === "再說服我";
+                    
                     btnChat.disabled = true;
                     btnRandom.disabled = true;
+                    const originalText = btnChat.innerText;
                     btnChat.innerText = "思考中...";
                     
-                    // 這裡的 Prompt 會引導 AI 針對「這張隨機選出的卡」進行說服
-                    const prompt = `【系統指令：使用者判定鳥事勝出。系統已選出新好事（${newGood.title}）。請執行模式三：給出全新觀點，嘗試再次說服。】`;
+                    let prompt = "";
+                    if (isRePersuade) {
+                        // [再說服我] 針對同一張卡片，要求不同觀點
+                        prompt = `【系統指令：使用者對目前的說法還不夠滿意。針對同一張好事卡（${newGood.title}），請切換一個完全不同的角度，再次嘗試說服使用者這張牌為何能扭轉鳥事。】`;
+                    } else {
+                        // [初次說服]
+                        prompt = `【系統指令：使用者判定鳥事勝出。系統已選出新好事（${newGood.title}）。請執行模式三：給出全新觀點，嘗試再次說服。】`;
+                    }
                     
                     const success = await callGeminiChat(prompt, true);
+                    
                     if (success) {
-                        btnChat.remove();
-                        btnRandom.disabled = false;
+                        btnChat.innerText = "再說服我"; // 變更文字
+                        btnChat.disabled = false;     // 常駐：重新啟用
+                        btnRandom.disabled = false;   // 常駐：重新啟用
                     } else {
                         btnChat.disabled = false;
                         btnRandom.disabled = false;
-                        btnChat.innerText = "請說服我";
+                        btnChat.innerText = originalText;
                     }
                 };
 
-                btnContainer.appendChild(btnChat);
+                // [修正] 位置交換：隨機抽卡在左，請說服我在右
                 btnContainer.appendChild(btnRandom);
+                btnContainer.appendChild(btnChat);
                 floatArea.appendChild(btnContainer);
             }
         } catch (e) { 
