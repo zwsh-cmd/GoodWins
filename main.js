@@ -291,9 +291,9 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 100px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 110px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
-                <div id="pk-floating-area" style="position: absolute; bottom: 55px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
+                <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
                 <div style="padding: 10px 0 10px 15px; border-top: 1px solid #F0F0F0; position: relative; background: #FFF; z-index: 25;">
                     <textarea id="chat-input" rows="1" placeholder="跟 AI 討論..." style="width: 100%; box-sizing: border-box; padding: 12px 60px 12px 15px; border: 1px solid #EEE; border-radius: 24px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px; resize: none; overflow-y: auto; line-height: 1.5; max-height: 100px; display: block;"></textarea>
@@ -1330,7 +1330,6 @@ async function startPK(data, collectionSource, options = {}) {
         document.getElementById('pk-good-content').innerText = "AI 正在分析戰局並挑選好事卡...";
         document.getElementById('pk-good-header').innerText = "好事";
 
-        // [修正] 根據進入點顯示不同開場白 (自動流程)
         if (options.isReDefeat) {
             addChatMessage('system', "———— 重新開啟戰局 ————", true);
         } else {
@@ -1338,123 +1337,144 @@ async function startPK(data, collectionSource, options = {}) {
         }
 
         const floatArea = document.getElementById('pk-floating-area');
-        floatArea.innerHTML = ''; // 清空
+        floatArea.innerHTML = ''; // 清空，確保唯一
 
-        // [新增] 預先顯示禁用的常駐按鈕 (Loading State)
-        const loadingBtnStyle = "flex:1; padding:10px 0; background:#F5F5F5; color:#CCC; border:1.5px solid #E0E0E0; border-radius:50px; font-weight:bold; font-size:13px; cursor:not-allowed; text-align:center; pointer-events:none;";
-        floatArea.innerHTML = `
-            <div style="display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; padding: 0 10px;">
-                <button style="${loadingBtnStyle}">隨機抽卡</button>
-                <button style="${loadingBtnStyle}">AI 思考中...</button>
-            </div>
-        `;
+        // --- 1. 立即渲染正確按鈕 (隨機=黃, 說服=灰) ---
+        const btnContainer = document.createElement('div');
+        btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; padding: 0 10px;";
+        
+        // 定義樣式
+        const yellowStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out; text-align:center;";
+        const grayStyle = "flex:1; padding:10px 0; background:#F5F5F5; color:#AAA; border:1.5px solid #E0E0E0; border-radius:50px; font-weight:bold; font-size:13px; cursor:not-allowed; text-align:center; pointer-events:none;";
 
-        const btnStyle = "display:block; margin:6px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
+        // 按鈕：隨機抽卡 (黃色常駐)
+        const btnRandom = document.createElement('button');
+        btnRandom.innerText = "隨機抽卡";
+        btnRandom.style.cssText = yellowStyle;
 
-        // 自動執行抽卡
+        // 按鈕：請說服我 (初始灰色)
+        const btnChat = document.createElement('button');
+        btnChat.innerText = "AI 思考中...";
+        btnChat.style.cssText = grayStyle;
+        btnChat.disabled = true;
+
+        btnContainer.appendChild(btnRandom);
+        btnContainer.appendChild(btnChat);
+        floatArea.appendChild(btnContainer);
+
+        let userIntervened = false;
+        let selectedGoodThing = null;
+
+        // 更新 UI 函式
+        const updateCardUI = (card) => {
+            if(!card) return;
+            if (card.id) {
+                currentPKContext.shownGoodCardIds.push(card.id);
+                if (currentPKContext.shownGoodCardIds.length > 18) currentPKContext.shownGoodCardIds.shift();
+            }
+            currentPKContext.good = card;
+            document.getElementById('pk-good-title').innerText = card.title;
+            document.getElementById('pk-good-content').innerText = card.content;
+            document.getElementById('pk-good-header').innerText = `好事 (Lv.${card.score || 1})`;
+            selectedGoodThing = card;
+            
+            // 卡片出來了，啟用「請說服我」為黃色
+            btnChat.style.cssText = yellowStyle;
+            btnChat.innerText = "請說服我";
+            btnChat.disabled = false;
+        };
+
+        // 按鈕邏輯：請說服我
+        btnChat.onclick = async () => {
+             btnChat.disabled = true;
+             btnRandom.disabled = true;
+             const originalText = btnChat.innerText;
+             btnChat.innerText = "思考中...";
+             
+             const isRePersuade = (originalText === "再說服我");
+             let prompt = "";
+             if (isRePersuade) {
+                 prompt = `【系統指令：使用者對目前的說法還不夠滿意。針對同一張好事卡（${selectedGoodThing.title}），請切換一個完全不同的角度，再次嘗試說服使用者這張牌為何能扭轉鳥事。】`;
+             } else {
+                 if (currentPKContext.chatLogs.length > 0) {
+                    prompt = `【系統指令：忽略舊結果。新好事卡為（${selectedGoodThing.title}）。請開始價值辯論。】`;
+                 } else {
+                    prompt = "【系統指令：PK 開始。策略選牌完成，進行價值辯論。】";
+                 }
+             }
+             
+             const success = await callGeminiChat(prompt, true);
+             if (success) {
+                 btnChat.innerText = "再說服我";
+                 btnChat.disabled = false;
+                 btnRandom.disabled = false;
+             } else {
+                 btnChat.innerText = originalText;
+                 btnChat.disabled = false;
+                 btnRandom.disabled = false;
+             }
+        };
+
+        // 自動執行抽卡 (背景非同步)
         (async () => {
             try {
-                // [修正] 改用 getMyCollection，移除 limit 以讀取所有好事卡
                 const querySnapshot = await getDocs(query(getMyCollection("good_things"), orderBy("createdAt", "desc")));
-                if (!querySnapshot.empty) {
-                    // [新增] 建立 Loading UI
-                    const loadingId = 'card-loading-' + Date.now();
-                    const chatHistory = document.getElementById('chat-history');
-                    const loadingDiv = document.createElement('div');
-                    loadingDiv.id = loadingId;
-                    loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic; margin-bottom: 10px;";
-                    loadingDiv.innerText = "正在分析戰局...";
-                    chatHistory.appendChild(loadingDiv);
-                    chatHistory.scrollTop = chatHistory.scrollHeight;
-
-                    // 定義進度更新 callback
-                    const updateStatus = (msg) => {
-                        const el = document.getElementById(loadingId);
-                        if(el) el.innerText = msg;
-                    };
-
-                    const selectedGoodThing = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
-                    
-                    // 取得結果後移除 Loading
-                    const el = document.getElementById(loadingId);
-                    if(el) el.remove();
-
-                    if (!selectedGoodThing || selectedGoodThing === "AI_FAILED") {
-                        addChatMessage('system', "AI 暫時找不到適合的好事卡，請稍後再試。", true);
+                
+                // 按鈕邏輯：隨機抽卡 (搶斷/重抽)
+                btnRandom.onclick = () => {
+                    // 若無卡片可抽
+                    if (querySnapshot.empty) {
+                        addChatMessage('system', "倉庫裡沒有好事卡，無法抽卡。", true);
                         return;
                     }
-                    if (selectedGoodThing.id) currentPKContext.shownGoodCardIds.push(selectedGoodThing.id);
-                    currentPKContext.good = selectedGoodThing;
-                    document.getElementById('pk-good-title').innerText = selectedGoodThing.title;
-                    document.getElementById('pk-good-content').innerText = selectedGoodThing.content;
-                    document.getElementById('pk-good-header').innerText = `好事 (Lv.${selectedGoodThing.score || 1})`;
-
-                    // [新增] 按鈕容器 (水平排列，置中)
-                    const btnContainer = document.createElement('div');
-                    btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; padding: 0 10px;";
-
-                    // 統一樣式：移除 margin:auto, 加入 flex:1
-                    const sharedBtnStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 0.8s infinite ease-in-out; text-align:center;";
-
-                    // 1. 請說服我按鈕 (將放在右邊)
-                    const btnChat = document.createElement('button');
-                    btnChat.innerText = "請說服我";
-                    btnChat.style.cssText = sharedBtnStyle;
                     
-                    // 2. 隨機抽卡按鈕 (將放在左邊)
-                    const btnRandom = document.createElement('button');
-                    btnRandom.innerText = "隨機抽卡";
-                    btnRandom.style.cssText = sharedBtnStyle;
+                    userIntervened = true; // 標記搶斷，AI 回來後會被忽略
 
-                    btnRandom.onclick = () => {
-                        if(btnRandom.disabled) return;
-                        // 參數3: true 代表使用真隨機 (不透過 AI)
-                        handlePKResult('bad', true, true); 
-                    };
+                    const candidates = querySnapshot.docs.filter(doc => !currentPKContext.shownGoodCardIds.includes(doc.id));
+                    const pool = candidates.length > 0 ? candidates : querySnapshot.docs; 
+                    const randomDoc = pool[Math.floor(Math.random() * pool.length)];
+                    
+                    updateCardUI({ id: randomDoc.id, ...randomDoc.data() });
+                    
+                    // 移除 Loading 文字 (如果有的話)
+                    const el = document.getElementById('start-pk-loading');
+                    if(el) el.remove();
+                };
 
-                    btnChat.onclick = async () => {
-                        const isRePersuade = btnChat.innerText === "再說服我";
-                        
-                        btnChat.disabled = true;
-                        btnRandom.disabled = true; // 思考時鎖定隨機按鈕
-                        const originalText = btnChat.innerText;
-                        btnChat.innerText = "思考中...";
-                        
-                        let success = false;
-                        let prompt = "";
-
-                        if (isRePersuade) {
-                            // [再說服我] 針對同一張卡片，要求不同觀點
-                            prompt = `【系統指令：使用者對目前的說法還不夠滿意。針對同一張好事卡（${selectedGoodThing.title}），請切換一個完全不同的角度，再次嘗試說服使用者這張牌為何能扭轉鳥事。】`;
-                        } else {
-                            // [初次說服]
-                            if (currentPKContext.chatLogs.length > 0) {
-                                prompt = `【系統指令：忽略舊結果。新好事卡為（${selectedGoodThing.title}）。請開始價值辯論。】`;
-                            } else {
-                                prompt = "【系統指令：PK 開始。策略選牌完成，進行價值辯論。】";
-                            }
-                        }
-
-                        success = await callGeminiChat(prompt, true);
-
-                        if (success) {
-                            btnChat.innerText = "再說服我"; // 變更文字
-                            btnChat.disabled = false;     // 常駐：重新啟用
-                            btnRandom.disabled = false;   // 常駐：重新啟用
-                        } else {
-                            btnChat.disabled = false;
-                            btnRandom.disabled = false;
-                            btnChat.innerText = originalText;
-                        }
-                    };
-
-                    // [修正] 位置交換：隨機抽卡在左，請說服我在右
-                    btnContainer.appendChild(btnRandom);
-                    btnContainer.appendChild(btnChat);
-                    floatArea.appendChild(btnContainer);
-                } else {
+                if (querySnapshot.empty) {
                     addChatMessage('system', "倉庫裡還沒有好事卡喔，先去記錄幾件好事吧！", true);
+                    return;
                 }
+
+                // 啟動 AI 運算 (背景執行)
+                const loadingId = 'start-pk-loading';
+                const chatHistory = document.getElementById('chat-history');
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = loadingId;
+                loadingDiv.style.cssText = "align-self: flex-start; font-size: 12px; color: #CCC; margin-left: 10px; font-style: italic; margin-bottom: 10px;";
+                loadingDiv.innerText = "正在分析戰局...";
+                chatHistory.appendChild(loadingDiv);
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                const updateStatus = (msg) => {
+                    const el = document.getElementById(loadingId);
+                    if(el) el.innerText = msg;
+                };
+
+                const aiPicked = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
+                
+                const el = document.getElementById(loadingId);
+                if(el) el.remove();
+
+                // 除非使用者已經搶斷，否則使用 AI 結果更新 UI
+                if (!userIntervened) {
+                    if (!aiPicked || aiPicked === "AI_FAILED") {
+                         addChatMessage('system', "AI 暫時找不到適合的好事卡，請手動隨機抽卡。", true);
+                         return;
+                    }
+                    updateCardUI(aiPicked);
+                }
+
             } catch (e) { 
                 console.error(e);
                 addChatMessage('system', "抽卡發生錯誤，請稍後再試。", true);
@@ -2598,16 +2618,75 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
         document.getElementById('pk-good-header').innerText = "好事";
 
         const floatArea = document.getElementById('pk-floating-area');
-        floatArea.innerHTML = ''; 
+        floatArea.innerHTML = ''; // 清空
 
-        // [新增] 預先顯示禁用的常駐按鈕 (Loading State)
-        const loadingBtnStyle = "flex:1; padding:10px 0; background:#F5F5F5; color:#CCC; border:1.5px solid #E0E0E0; border-radius:50px; font-weight:bold; font-size:13px; cursor:not-allowed; text-align:center; pointer-events:none;";
-        floatArea.innerHTML = `
-            <div style="display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; margin-bottom:15px; padding:0 10px;">
-                <button style="${loadingBtnStyle}">隨機抽卡</button>
-                <button style="${loadingBtnStyle}">AI 思考中...</button>
-            </div>
-        `;
+        // --- 1. 立即渲染正確按鈕 ---
+        const btnContainer = document.createElement('div');
+        btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; margin-bottom:15px; padding:0 10px;";
+        
+        const yellowStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out; text-align:center;";
+        const grayStyle = "flex:1; padding:10px 0; background:#F5F5F5; color:#AAA; border:1.5px solid #E0E0E0; border-radius:50px; font-weight:bold; font-size:13px; cursor:not-allowed; text-align:center; pointer-events:none;";
+
+        const btnRandom = document.createElement('button');
+        btnRandom.innerText = "隨機抽卡";
+        btnRandom.style.cssText = yellowStyle;
+
+        const btnChat = document.createElement('button');
+        btnChat.innerText = "AI 思考中...";
+        btnChat.style.cssText = grayStyle;
+        btnChat.disabled = true;
+
+        btnContainer.appendChild(btnRandom);
+        btnContainer.appendChild(btnChat);
+        floatArea.appendChild(btnContainer);
+
+        let userIntervened = false;
+        let selectedGoodThing = null;
+
+        // 更新 UI 函式
+        const updateCardUI = (card) => {
+            if(!card) return;
+            if (card.id) {
+                currentPKContext.shownGoodCardIds.push(card.id);
+                if (currentPKContext.shownGoodCardIds.length > 18) currentPKContext.shownGoodCardIds.shift();
+            }
+            currentPKContext.good = card;
+            document.getElementById('pk-good-title').innerText = card.title;
+            document.getElementById('pk-good-content').innerText = card.content;
+            document.getElementById('pk-good-header').innerText = `好事 (Lv.${card.score || 1})`;
+            selectedGoodThing = card;
+            
+            btnChat.style.cssText = yellowStyle;
+            btnChat.innerText = "請說服我";
+            btnChat.disabled = false;
+        };
+
+        // 按鈕邏輯：請說服我
+        btnChat.onclick = async () => {
+             btnChat.disabled = true;
+             btnRandom.disabled = true;
+             const originalText = btnChat.innerText;
+             btnChat.innerText = "思考中...";
+             
+             const isRePersuade = (originalText === "再說服我");
+             let prompt = "";
+             if (isRePersuade) {
+                 prompt = `【系統指令：使用者對目前的說法還不夠滿意。針對同一張好事卡（${selectedGoodThing.title}），請切換一個完全不同的角度，再次嘗試說服使用者這張牌為何能扭轉鳥事。】`;
+             } else {
+                 prompt = `【系統指令：使用者判定鳥事勝出。系統已選出新好事（${selectedGoodThing.title}）。請執行模式三：給出全新觀點，嘗試再次說服。】`;
+             }
+             
+             const success = await callGeminiChat(prompt, true);
+             if (success) {
+                 btnChat.innerText = "再說服我";
+                 btnChat.disabled = false;
+                 btnRandom.disabled = false;
+             } else {
+                 btnChat.innerText = originalText;
+                 btnChat.disabled = false;
+                 btnRandom.disabled = false;
+             }
+        };
 
         try {
             // [修正] 改用 getMyCollection，移除 limit
