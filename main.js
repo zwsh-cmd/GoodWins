@@ -2597,7 +2597,7 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
 
         // --- 1. 立即渲染正確按鈕 ---
         const btnContainer = document.createElement('div');
-        btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; margin-bottom:15px; padding:0 10px;";
+        btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; padding:0 10px;";
         
         const yellowStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out; text-align:center;";
         const grayStyle = "flex:1; padding:10px 0; background:#F5F5F5; color:#AAA; border:1.5px solid #E0E0E0; border-radius:50px; font-weight:bold; font-size:13px; cursor:not-allowed; text-align:center; pointer-events:none;";
