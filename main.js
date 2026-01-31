@@ -291,7 +291,7 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 50px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 130px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
             
                 <div id="pk-floating-area" style="position: absolute; bottom: 75px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
@@ -516,7 +516,6 @@ function createPKScreenHTML() {
                                 if(el) {
                                     el.innerText = "✅ 已選出好事卡。";
                                     el.style.color = "#DDD";
-                                    el.style.marginBottom = "75px";
                                     el.id = "";
                                 }
 
@@ -1412,7 +1411,6 @@ async function startPK(data, collectionSource, options = {}) {
                     if(el) {
                         el.innerText = "✅ 已選出好事卡。";
                         el.style.color = "#DDD";
-                        el.style.marginBottom = "75px";
                         el.id = "";
                     }
                 };
@@ -2723,7 +2721,6 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                 if(el) {
                     el.innerText = "✅ 已選出好事卡。";
                     el.style.color = "#DDD";
-                    el.style.marginBottom = "75px";
                     el.id = "";
                 }
                 
