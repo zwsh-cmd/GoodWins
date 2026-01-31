@@ -504,7 +504,7 @@ function createPKScreenHTML() {
                                 if(el) el.remove();
 
                                 if (!newGood || newGood === "AI_FAILED") {
-                                    addChatMessage('system', "AI 暫時找不到適合的好事卡，請稍後再試。", true);
+                                    addChatMessage('system', "AI 暫時找不到適合的好事卡，請點擊鳥事卡再次嘗試。", true);
                                     return;
                                 }
                                 
@@ -2641,7 +2641,7 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                     if (useTrueRandom) {
                         addChatMessage('system', "倉庫裡的好事卡都用過一輪囉！無法再隨機選出了。", true);
                     } else {
-                        addChatMessage('system', "AI 正在深度思考創意連結，請重新點擊鳥事卡嘗試。", true);
+                        addChatMessage('system', "AI 暫時找不到適合的好事卡，請點擊鳥事卡再次嘗試。", true);
                     }
                     return;
                 }
@@ -2718,7 +2718,7 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
             }
         } catch (e) { 
             console.error(e);
-            addChatMessage('system', "暫時無法選出合適的好事卡，請重新點擊鳥事卡再試一次。", true);
+            addChatMessage('system', "AI 暫時找不到適合的好事卡，請點擊鳥事卡再次嘗試。", true);
         }
         return;
     }
