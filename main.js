@@ -1109,7 +1109,7 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
 
     // [核心修改] Prompt：將「循序掃描」改為「全域審視」，並將高分卡門檻放寬至 Lv.3-5
     const selectionPrompt = `
-    任務：你是「GoodWins」APP 的邏輯演算中樞。你的任務不是「安撫」，而是進行嚴謹的**「價值平衡運算 (Value Equilibrium Calculation)」**。
+    任務：你是「GoodWins」APP 的邏輯演算中樞。你的任務是「價值平衡運算 (Value Equilibrium Calculation)」**。
     目標：從清單中計算出唯一一張能對【眼前鳥事】進行「有效補償」的卡片。
 
     【變數輸入】
@@ -1123,10 +1123,6 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
     
     **邏輯一：補償原則 (The Principle of Compensation)**
     - 鳥事被視為一種「虧損 (Debit)」。你的任務是尋找「進帳 (Credit)」來平衡報表。
-    - **無效運算**：內在轉念、道德昇華、吃苦忍耐。這些屬於「掩蓋虧損」，而非「進帳」，必須直接排除。
-    - **有效運算**：
-        1. **外在獲得**：金錢、禮物、讚賞、特權、好運。
-        2. **內在效能**：能力提升、解決難題的成就感、對作品的自豪感。
 
     **邏輯二：主詞權重過濾器 (Subject-Dependent Filter)**
     請根據好事卡片的「行為主體 (Subject)」與「結果 (Outcome)」進行交叉驗證：
@@ -1137,7 +1133,6 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
        - 拒絕結果為 **[自我犧牲]** (忍讓、吃虧)。 -> 判定為：**奴性 (Servitude)** -> **剔除**。
 
     2. **當主詞是「他人 (第三人稱)」時：**
-       - **嚴格限制**：結果**必須**包含 **[外在回報]**。
        - **核心判定**：這張卡片必須能**「證明這世界還有公道，努力會有回報」**。
          - ✅ **通過 (希望)**：他人努力 + 獲得讚賞/獎勵。 -> 證明了公理存在。
          - ❌ **剔除 (壓迫)**：他人努力 + 只有內在滿足。 -> 暗示使用者計較/不夠無私。
@@ -1150,6 +1145,8 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
     - **允許「以小博大」**：請優先考慮內容的「性質互補性」而非「分數」。
     - 即使好事卡只有 1 分 (Micro)，只要它的性質能精準抵銷鳥事。
     - **絕對不要因為好事卡分數低於鳥事卡就放棄選擇**，請盡力選出一張最適合的。
+    
+	**重要規則2：嚴禁說教、否定使用者想法、勉強使用者轉念。而是應該藉由引導和感人的理由來幫助使用者感受好事卡的正面力量。
 
     【執行程序】
     1. **掃描 (Scan)**：讀取所有候選卡片。
