@@ -297,15 +297,17 @@ function createPKScreenHTML() {
 
                 <div style="position: relative; background: #FFF; z-index: 25; border-top: 1px solid #F0F0F0;">
                     
-                    <div style="position: absolute; top: 10px; bottom: 10px; left: 10px; right: 10px; border: 1px solid #EEE; border-radius: 24px; background: #FAFAFA; pointer-events: none;"></div>
+                    <div style="position: absolute; top: 10px; bottom: 10px; left: 10px; right: 10px; border: 1px solid #EEE; border-radius: 24px; background: #FAFAFA; pointer-events: none; z-index: 1;"></div>
 
                     <textarea id="chat-input" rows="1" placeholder="跟 AI 討論..." 
                         style="display: block; width: 100%; box-sizing: border-box; 
-                               padding: 22px 55px 22px 25px; 
+                               margin: 10px 0;
+                               padding: 12px 75px 12px 25px; 
                                border: none; background: transparent; outline: none; 
                                color: var(--text-main); font-size: 13px; 
                                resize: none; overflow-y: auto; line-height: 1.5; 
-                               max-height: 130px; position: relative;"></textarea>
+                               max-height: 130px; position: relative; z-index: 2;
+                               white-space: pre-wrap; overflow-wrap: break-word; word-break: break-all;"></textarea>
 
                     <button id="btn-send-chat" style="background: var(--primary); color: #FFF; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; position: absolute; right: 22px; bottom: 13px; z-index: 10;">
                         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
