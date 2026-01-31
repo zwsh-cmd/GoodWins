@@ -1217,15 +1217,26 @@ async function startPK(data, collectionSource, options = {}) {
         excludeTitles: []     // [新增] 紀錄歷史勝利的好事卡標題
     };
 
-    // [新增] 1. 解析歷史對話，找出過去曾經被淘汰或出現過的好事卡標題，加入排除清單 (避免重複)
+    // [修正] 如果是「再擊敗」，必須將上次贏的那張好事卡(excludeGoodTitle)也加入黑名單
+    if (options.excludeGoodTitle) {
+        currentPKContext.shownGoodCardIds.push(options.excludeGoodTitle);
+    }
+
+    // [修正] 1. 解析歷史對話，同時支援「舊格式(已淘汰)」與「新格式(暫時落敗)」
     if (data.chatLogs && Array.isArray(data.chatLogs)) {
         data.chatLogs.forEach(log => {
              if (log.role === 'system') {
-                 // 匹配 "「...」暫時落敗" (配合使用者偏好) 或 "新好事卡為（...）"
-                 const m1 = log.text.match(/「(.*?)」暫時落敗/);
-                 if (m1) currentPKContext.shownGoodCardIds.push(m1[1]);
-                 const m2 = log.text.match(/新好事卡為（(.*?)）/);
-                 if (m2) currentPKContext.shownGoodCardIds.push(m2[1]);
+                 // 格式 A: 新版 "「...」暫時落敗"
+                 const mNew = log.text.match(/「(.*?)」暫時落敗/);
+                 if (mNew) currentPKContext.shownGoodCardIds.push(mNew[1]);
+                 
+                 // 格式 B: 舊版 "已淘汰「...」" (相容舊紀錄)
+                 const mOld = log.text.match(/已淘汰「(.*?)」/);
+                 if (mOld) currentPKContext.shownGoodCardIds.push(mOld[1]);
+
+                 // 格式 C: 換牌 "新好事卡為（...）"
+                 const mSwap = log.text.match(/新好事卡為（(.*?)）/);
+                 if (mSwap) currentPKContext.shownGoodCardIds.push(mSwap[1]);
              }
         });
     }
