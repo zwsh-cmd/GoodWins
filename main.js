@@ -507,7 +507,15 @@ function createPKScreenHTML() {
                                     addChatMessage('system', "AI 暫時找不到適合的好事卡，請稍後再試。", true);
                                     return;
                                 }
-                                if (newGood.id) currentPKContext.shownGoodCardIds.push(newGood.id);
+                                
+                                // [修正] 補上 FIFO 機制：保持黑名單在 18 張以內 (確保邏輯一致性)
+                                if (newGood.id) {
+                                    currentPKContext.shownGoodCardIds.push(newGood.id);
+                                    if (currentPKContext.shownGoodCardIds.length > 18) {
+                                        currentPKContext.shownGoodCardIds.shift();
+                                    }
+                                }
+
                                 currentPKContext.good = newGood;
                                 document.getElementById('pk-good-title').innerText = newGood.title;
                                 document.getElementById('pk-good-content').innerText = newGood.content;
@@ -1088,25 +1096,29 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
     const excludes = Array.isArray(excludeList) ? excludeList : (excludeList ? [excludeList] : []);
 
     // 2. 嚴格過濾：同時檢查 ID 與 Title (只排除傳入的黑名單)
-    const availableDocs = candidateDocs.filter(doc => {
+    let finalCandidates = candidateDocs.filter(doc => {
         const data = doc.data();
         const isExcludedById = excludes.includes(doc.id);
         const isExcludedByTitle = excludes.includes(data.title);
         return !isExcludedById && !isExcludedByTitle;
     });
 
-    if (availableDocs.length === 0) return null;
+    // [修正] 自動重置機制：如果過濾後發現沒牌了 (都被加入黑名單)，則解禁所有卡片
+    // 避免因為卡片太少導致無限輪迴的 "return null"
+    if (finalCandidates.length === 0) {
+        console.warn("所有好事卡都已輪過一輪，解除黑名單限制，重新開放所有卡片。");
+        finalCandidates = candidateDocs;
+    }
+
+    if (finalCandidates.length === 0) return null;
 
     // 3. 排序：依照分數由低到高 (Lv.1 -> Lv.5)
     // 雖然我們要 AI 看全部，但有序的清單有助於 AI 理解「成本結構」，保留「以小搏大」的參考依據。
-    availableDocs.sort((a, b) => {
+    finalCandidates.sort((a, b) => {
         const scoreA = parseInt(a.data().score) || 1;
         const scoreB = parseInt(b.data().score) || 1;
         return scoreA - scoreB;
     });
-
-    // [修正] 解除數量限制：掃描所有卡片，以確保最佳判斷 (AI Context Window 足夠大)
-    const finalCandidates = availableDocs;
 
     // 製作給 AI 看的資料 (保留原始結構)
     const aiInputCandidates = finalCandidates.map(doc => ({
@@ -1257,6 +1269,11 @@ async function startPK(data, collectionSource, options = {}) {
                  if (mSwap) currentPKContext.shownGoodCardIds.push(mSwap[1]);
              }
         });
+
+        // [新增] 強制只保留最後 18 筆歷史黑名單 (遺忘機制)
+        if (currentPKContext.shownGoodCardIds.length > 18) {
+            currentPKContext.shownGoodCardIds = currentPKContext.shownGoodCardIds.slice(-18);
+        }
     }
 
     if (collectionSource === 'pk_wins') {
@@ -2608,7 +2625,13 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                     return;
                 }
 
-                if (newGood.id) currentPKContext.shownGoodCardIds.push(newGood.id);
+                if (newGood.id) {
+                    currentPKContext.shownGoodCardIds.push(newGood.id);
+                    // [修正] FIFO 機制：保持黑名單在 18 張以內
+                    if (currentPKContext.shownGoodCardIds.length > 18) {
+                        currentPKContext.shownGoodCardIds.shift();
+                    }
+                }
                 currentPKContext.good = newGood;
                 document.getElementById('pk-good-title').innerText = newGood.title;
                 document.getElementById('pk-good-content').innerText = newGood.content;
