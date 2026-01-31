@@ -291,9 +291,9 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 110px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
-                
-                <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 95px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+            
+            <div id="pk-floating-area" style="position: absolute; bottom: 60px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
                 <div style="padding: 10px 0 10px 15px; border-top: 1px solid #F0F0F0; position: relative; background: #FFF; z-index: 25;">
                     <textarea id="chat-input" rows="1" placeholder="跟 AI 討論..." style="width: 100%; box-sizing: border-box; padding: 12px 60px 12px 15px; border: 1px solid #EEE; border-radius: 24px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px; resize: none; overflow-y: auto; line-height: 1.5; max-height: 100px; display: block;"></textarea>
@@ -521,41 +521,7 @@ function createPKScreenHTML() {
                                 document.getElementById('pk-good-content').innerText = newGood.content;
                                 document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
                                 
-                                // [新增] 按鈕容器
-                                const btnContainer = document.createElement('div');
-                                btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center;";
-
-                                const btnChat = document.createElement('button');
-                                btnChat.innerText = "請說服我";
-                                btnChat.style.cssText = btnStyle;
-
-                                // [新增] 隨機選出按鈕
-                                const btnRandom = document.createElement('button');
-                                btnRandom.innerText = "隨機選出";
-                                btnRandom.style.cssText = "padding:6px 16px; background:#F0F4C3; color:#827717; border:1.5px solid #827717; border-radius:50px; font-weight:bold; font-size:11.5px; cursor:pointer; box-shadow:0 4px 10px rgba(130,119,23,0.1); flex-shrink:0;";
-                                btnRandom.onclick = () => {
-                                    if(btnRandom.disabled) return;
-                                    handlePKResult('bad', true);
-                                };
-
-                                btnChat.onclick = async () => {
-                                    btnChat.disabled = true;
-                                    btnRandom.disabled = true;
-                                    btnChat.innerText = "思考中...";
-                                    const success = await callGeminiChat(`【系統指令：忽略舊結果。新好事卡為（${newGood.title}）。請開始價值辯論。】`, true);
-                                    if(success) {
-                                        btnChat.remove();
-                                        btnRandom.disabled = false;
-                                    } else {
-                                        btnChat.disabled = false;
-                                        btnRandom.disabled = false;
-                                        btnChat.innerText = "請說服我";
-                                    }
-                                };
-
-                                btnContainer.appendChild(btnChat);
-                                btnContainer.appendChild(btnRandom);
-                                floatArea.appendChild(btnContainer);
+                                // (已移除重複的按鈕生成代碼)
                             } else {
                                 addChatMessage('system', "倉庫裡還沒有好事卡喔！", true);
                             }
@@ -2761,62 +2727,12 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                 // [修正] 選定新卡後恢復位階顯示
                 document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
 
-                // [新增] 按鈕容器
-                const btnContainer = document.createElement('div');
-                btnContainer.style.cssText = "display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; margin-bottom:15px; padding:0 10px;";
-
-                // 統一樣式
-                const sharedBtnStyle = "flex:1; padding:10px 0; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:13px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 0.8s infinite ease-in-out; text-align:center;";
-
-                const btnChat = document.createElement('button');
-                btnChat.innerText = "請說服我";
-                btnChat.style.cssText = sharedBtnStyle;
-
-                // 隨機抽卡按鈕 (與上面一致)
-                const btnRandom = document.createElement('button');
-                btnRandom.innerText = "隨機抽卡";
-                btnRandom.style.cssText = sharedBtnStyle;
-
+                // 修正：綁定現有按鈕的點擊事件，不重複生成
                 btnRandom.onclick = () => {
                     if(btnRandom.disabled) return;
                     // 參數3: true 代表使用真隨機
                     handlePKResult('bad', true, true);
                 };
-
-                btnChat.onclick = async () => {
-                    const isRePersuade = btnChat.innerText === "再說服我";
-                    
-                    btnChat.disabled = true;
-                    btnRandom.disabled = true;
-                    const originalText = btnChat.innerText;
-                    btnChat.innerText = "思考中...";
-                    
-                    let prompt = "";
-                    if (isRePersuade) {
-                        // [再說服我] 針對同一張卡片，要求不同觀點
-                        prompt = `【系統指令：使用者對目前的說法還不夠滿意。針對同一張好事卡（${newGood.title}），請切換一個完全不同的角度，再次嘗試說服使用者這張牌為何能扭轉鳥事。】`;
-                    } else {
-                        // [初次說服]
-                        prompt = `【系統指令：使用者判定鳥事勝出。系統已選出新好事（${newGood.title}）。請執行模式三：給出全新觀點，嘗試再次說服。】`;
-                    }
-                    
-                    const success = await callGeminiChat(prompt, true);
-                    
-                    if (success) {
-                        btnChat.innerText = "再說服我"; // 變更文字
-                        btnChat.disabled = false;     // 常駐：重新啟用
-                        btnRandom.disabled = false;   // 常駐：重新啟用
-                    } else {
-                        btnChat.disabled = false;
-                        btnRandom.disabled = false;
-                        btnChat.innerText = originalText;
-                    }
-                };
-
-                // [修正] 位置交換：隨機抽卡在左，請說服我在右
-                btnContainer.appendChild(btnRandom);
-                btnContainer.appendChild(btnChat);
-                floatArea.appendChild(btnContainer);
             }
         } catch (e) { 
             console.error(e);
