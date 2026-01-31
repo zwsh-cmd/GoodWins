@@ -1356,8 +1356,11 @@ async function startPK(data, collectionSource, options = {}) {
         btnChat.onclick = async () => {
              btnChat.disabled = true;
              btnRandom.disabled = true;
+             
+             // [修正] 轉為灰色思考狀態
              const originalText = btnChat.innerText;
-             btnChat.innerText = "思考中...";
+             btnChat.style.cssText = grayStyle; 
+             btnChat.innerText = "AI 思考中..."; 
              
              const isRePersuade = (originalText === "再說服我");
              let prompt = "";
@@ -1372,14 +1375,16 @@ async function startPK(data, collectionSource, options = {}) {
              }
              
              const success = await callGeminiChat(prompt, true);
+             
+             // [修正] 恢復黃色按鈕狀態
+             btnChat.style.cssText = yellowStyle;
+             btnChat.disabled = false;
+             btnRandom.disabled = false;
+
              if (success) {
                  btnChat.innerText = "再說服我";
-                 btnChat.disabled = false;
-                 btnRandom.disabled = false;
              } else {
                  btnChat.innerText = originalText;
-                 btnChat.disabled = false;
-                 btnRandom.disabled = false;
              }
         };
 
@@ -2643,8 +2648,11 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
         btnChat.onclick = async () => {
              btnChat.disabled = true;
              btnRandom.disabled = true;
+             
+             // [修正] 轉為灰色思考狀態
              const originalText = btnChat.innerText;
-             btnChat.innerText = "思考中...";
+             btnChat.style.cssText = grayStyle;
+             btnChat.innerText = "AI 思考中...";
              
              const isRePersuade = (originalText === "再說服我");
              let prompt = "";
@@ -2655,14 +2663,16 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
              }
              
              const success = await callGeminiChat(prompt, true);
+             
+             // [修正] 恢復黃色按鈕狀態
+             btnChat.style.cssText = yellowStyle;
+             btnChat.disabled = false;
+             btnRandom.disabled = false;
+
              if (success) {
                  btnChat.innerText = "再說服我";
-                 btnChat.disabled = false;
-                 btnRandom.disabled = false;
              } else {
                  btnChat.innerText = originalText;
-                 btnChat.disabled = false;
-                 btnRandom.disabled = false;
              }
         };
 
