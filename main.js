@@ -511,9 +511,13 @@ function createPKScreenHTML() {
 
                                 const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
                                 
-                                // 移除 Loading
-                                const el = document.getElementById(loadingId);
-                                if(el) el.remove();
+                                // [修正] 開局抽卡也保留靜態紀錄，保持體驗一致
+                const el = document.getElementById(loadingId);
+                if(el) {
+                    el.innerText = "✅ 已選出好事卡。";
+                    el.style.color = "#DDD";
+                    el.id = "";
+                }
 
                                 if (!newGood || newGood === "AI_FAILED") {
                                     addChatMessage('system', "AI 暫時找不到適合的好事卡，請點擊鳥事卡再次嘗試。", true);
@@ -1411,9 +1415,13 @@ async function startPK(data, collectionSource, options = {}) {
                     
                     updateCardUI({ id: randomDoc.id, ...randomDoc.data() });
                     
-                    // 移除 Loading 文字 (如果有的話)
+                    // [修正] 改為靜態文字，防止隨機抽卡時畫面跳動
                     const el = document.getElementById('start-pk-loading');
-                    if(el) el.remove();
+                    if(el) {
+                        el.innerText = "✅ 已選出好事卡。";
+                        el.style.color = "#DDD";
+                        el.id = "";
+                    }
                 };
 
                 if (querySnapshot.empty) {
@@ -2717,9 +2725,13 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                     newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
                 }
                 
-                // 移除 Loading
+                // [修正] 不移除 Loading，改為靜態文字以防止畫面跳動
                 const el = document.getElementById(loadingId);
-                if(el) el.remove();
+                if(el) {
+                    el.innerText = "✅ 已選出好事卡。";
+                    el.style.color = "#DDD"; // 讓顏色變更淡，像背景一樣
+                    el.id = ""; // 移除 ID 避免重複抓取
+                }
                 
                 if (!newGood) {
                     if (useTrueRandom) {
