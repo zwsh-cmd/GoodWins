@@ -2597,6 +2597,13 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
         btnRandom.innerText = "隨機抽卡";
         btnRandom.style.cssText = yellowStyle;
 
+        // [修正] 立即綁定點擊事件，避免 AI 失敗提早 return 導致按鈕無反應
+        btnRandom.onclick = () => {
+            if(btnRandom.disabled) return;
+            // 參數3: true 代表使用真隨機
+            handlePKResult('bad', true, true);
+        };
+
         const btnChat = document.createElement('button');
         btnChat.innerText = "AI 思考中...";
         btnChat.style.cssText = grayStyle;
@@ -2726,13 +2733,6 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                 document.getElementById('pk-good-content').innerText = newGood.content;
                 // [修正] 選定新卡後恢復位階顯示
                 document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
-
-                // 修正：綁定現有按鈕的點擊事件，不重複生成
-                btnRandom.onclick = () => {
-                    if(btnRandom.disabled) return;
-                    // 參數3: true 代表使用真隨機
-                    handlePKResult('bad', true, true);
-                };
             }
         } catch (e) { 
             console.error(e);
