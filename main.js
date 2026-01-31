@@ -152,7 +152,7 @@ function createGlobalComponents() {
         }
         @keyframes pulse-btn {
             0% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 rgba(251,192,45,0); }
-            50% { opacity: 0.8; transform: scale(0.95); box-shadow: 0 0 15px rgba(251,192,45,0.6); }
+            50% { opacity: 0.9; transform: scale(0.98); box-shadow: 0 0 10px rgba(251,192,45,0.4); }
             100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 rgba(251,192,45,0); }
         }
     `;
@@ -291,9 +291,9 @@ function createPKScreenHTML() {
             </div>
 
             <div style="flex: 1; background: #FFF; border-radius: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.02); position: relative;">
-                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 20px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
+                <div id="chat-history" style="flex: 1; overflow-y: auto; padding: 20px 20px 100px 20px; display: flex; flex-direction: column; gap: 15px;"></div>
                 
-                <div id="pk-floating-area" style="position: absolute; bottom: 70px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
+                <div id="pk-floating-area" style="position: absolute; bottom: 55px; left: 0; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 20;"></div>
 
                 <div style="padding: 10px 0 10px 15px; border-top: 1px solid #F0F0F0; position: relative; background: #FFF; z-index: 25;">
                     <textarea id="chat-input" rows="1" placeholder="跟 AI 討論..." style="width: 100%; box-sizing: border-box; padding: 12px 60px 12px 15px; border: 1px solid #EEE; border-radius: 24px; outline: none; background: #FAFAFA; color: var(--text-main); font-size: 13px; resize: none; overflow-y: auto; line-height: 1.5; max-height: 100px; display: block;"></textarea>
@@ -1168,6 +1168,11 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
     - 優先搜尋 **[同領域的反向事件]** (工作被貶低 vs 工作被讚賞)。
     - 若同領域無有效解 (即：同領域卡片皆被邏輯二剔除)，則啟動 **[跨領域補償]** (工作虧損 vs 生活進帳)。
 
+	**重要規則：忽略等級限制 (Ignore Score Constraints)**
+    - **允許「以小博大」**：請優先考慮內容的「性質互補性」而非「分數」。
+    - 即使好事卡只有 1 分 (Micro)，只要它的性質能精準抵銷鳥事。
+    - **絕對不要因為好事卡分數低於鳥事卡就放棄選擇**，請盡力選出一張最適合的。
+
     【執行程序】
     1. **掃描 (Scan)**：讀取所有候選卡片。
     2. **驗證 (Validate)**：對每一張卡片套用【邏輯二】。
@@ -1334,6 +1339,15 @@ async function startPK(data, collectionSource, options = {}) {
 
         const floatArea = document.getElementById('pk-floating-area');
         floatArea.innerHTML = ''; // 清空
+
+        // [新增] 預先顯示禁用的常駐按鈕 (Loading State)
+        const loadingBtnStyle = "flex:1; padding:10px 0; background:#F5F5F5; color:#CCC; border:1.5px solid #E0E0E0; border-radius:50px; font-weight:bold; font-size:13px; cursor:not-allowed; text-align:center; pointer-events:none;";
+        floatArea.innerHTML = `
+            <div style="display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; padding: 0 10px;">
+                <button style="${loadingBtnStyle}">隨機抽卡</button>
+                <button style="${loadingBtnStyle}">AI 思考中...</button>
+            </div>
+        `;
 
         const btnStyle = "display:block; margin:6px auto; padding:6px 16px; background:#FFF9C4; color:#FBC02D; border:1.5px solid #FBC02D; border-radius:50px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 4px 10px rgba(251,192,45,0.1); pointer-events: auto; animation: pulse-btn 1.5s infinite ease-in-out;";
 
@@ -2585,6 +2599,15 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
 
         const floatArea = document.getElementById('pk-floating-area');
         floatArea.innerHTML = ''; 
+
+        // [新增] 預先顯示禁用的常駐按鈕 (Loading State)
+        const loadingBtnStyle = "flex:1; padding:10px 0; background:#F5F5F5; color:#CCC; border:1.5px solid #E0E0E0; border-radius:50px; font-weight:bold; font-size:13px; cursor:not-allowed; text-align:center; pointer-events:none;";
+        floatArea.innerHTML = `
+            <div style="display:flex; gap:10px; justify-content:center; width:100%; pointer-events:auto; align-items:center; margin-bottom:15px; padding:0 10px;">
+                <button style="${loadingBtnStyle}">隨機抽卡</button>
+                <button style="${loadingBtnStyle}">AI 思考中...</button>
+            </div>
+        `;
 
         try {
             // [修正] 改用 getMyCollection，移除 limit
