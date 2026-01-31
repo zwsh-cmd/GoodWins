@@ -2556,9 +2556,12 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
              addChatMessage('user', "還是覺得這件鳥事比較強... 😤", true);
         }
         
-        const defeatedTitle = currentPKContext.good?.title || "未知好事";
-        // [修正] 修改文字並支援 Loading
-        addChatMessage('system', `收到。「${defeatedTitle}」暫時落敗。\n正在運用創意召喚新卡片進行對決。`, true);
+        const defeatedTitle = currentPKContext.good?.title;
+        // [修正] 若有好事卡標題則顯示落敗，若無(如未知好事)則僅顯示收到
+        const sysMsg = defeatedTitle 
+            ? `收到。「${defeatedTitle}」暫時落敗。\n正在運用創意召喚新卡片進行對決。`
+            : "收到。\n正在運用創意召喚新卡片進行對決。";
+        addChatMessage('system', sysMsg, true);
 
         // 重置標題與位階標題
         document.getElementById('pk-good-title').innerText = "重新部署中...";
