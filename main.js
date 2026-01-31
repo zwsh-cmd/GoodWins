@@ -511,18 +511,16 @@ function createPKScreenHTML() {
 
                                 const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
                                 
-                                // [修正] 開局抽卡也保留靜態紀錄，保持體驗一致
                                 const el = document.getElementById(loadingId);
-                                if(el) {
-                                    el.innerText = "✅ 已選出好事卡。";
-                                    el.style.color = "#DDD";
-                                    el.id = "";
-                                }
+                                if(el) el.remove(); // 移除 Loading 動畫
 
                                 if (!newGood || newGood === "AI_FAILED") {
                                     addChatMessage('system', "AI 暫時找不到適合的好事卡，請點擊鳥事卡再次嘗試。", true);
                                     return;
                                 }
+
+                                // [修正] 只有成功時才顯示並儲存紀錄
+                                addChatMessage('system', "✅ 已選出好事卡。", true);
                                 
                                 // [修正] 補上 FIFO 機制：保持黑名單在 18 張以內 (確保邏輯一致性)
                                 if (newGood.id) {
@@ -1406,13 +1404,10 @@ async function startPK(data, collectionSource, options = {}) {
                     
                     updateCardUI({ id: randomDoc.id, ...randomDoc.data() });
                     
-                    // [修正] 改為靜態文字，防止隨機抽卡時畫面跳動
+                    // [修正] 移除 Loading 並寫入對話紀錄
                     const el = document.getElementById('start-pk-loading');
-                    if(el) {
-                        el.innerText = "✅ 已選出好事卡。";
-                        el.style.color = "#DDD";
-                        el.id = "";
-                    }
+                    if(el) el.remove();
+                    addChatMessage('system', "✅ 已選出好事卡。", true);
                 };
 
                 if (querySnapshot.empty) {
@@ -1447,6 +1442,8 @@ async function startPK(data, collectionSource, options = {}) {
                          return;
                     }
                     updateCardUI(aiPicked);
+                    // [修正] 成功選出後寫入紀錄
+                    addChatMessage('system', "✅ 已選出好事卡。", true);
                 }
 
             } catch (e) { 
@@ -2716,14 +2713,9 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                     newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
                 }
                 
-                // [修正] 不移除 Loading，改為靜態文字以防止畫面跳動
                 const el = document.getElementById(loadingId);
-                if(el) {
-                    el.innerText = "✅ 已選出好事卡。";
-                    el.style.color = "#DDD";
-                    el.id = "";
-                }
-                
+                if(el) el.remove(); // 移除 Loading
+
                 if (!newGood) {
                     if (useTrueRandom) {
                         addChatMessage('system', "倉庫裡的好事卡都用過一輪囉！無法再隨機選出了。", true);
@@ -2735,6 +2727,8 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
 
                 // 直接呼叫 updateCardUI 來更新介面並喚醒按鈕
                 updateCardUI(newGood);
+                // [修正] 成功選出後寫入紀錄
+                addChatMessage('system', "✅ 已選出好事卡。", true);
             }
         } catch (e) { 
             console.error(e);
