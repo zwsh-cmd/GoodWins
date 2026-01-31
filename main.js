@@ -2730,18 +2730,8 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                     return;
                 }
 
-                if (newGood.id) {
-                    currentPKContext.shownGoodCardIds.push(newGood.id);
-                    // [修正] FIFO 機制：保持黑名單在 18 張以內
-                    if (currentPKContext.shownGoodCardIds.length > 18) {
-                        currentPKContext.shownGoodCardIds.shift();
-                    }
-                }
-                currentPKContext.good = newGood;
-                document.getElementById('pk-good-title').innerText = newGood.title;
-                document.getElementById('pk-good-content').innerText = newGood.content;
-                // [修正] 選定新卡後恢復位階顯示
-                document.getElementById('pk-good-header').innerText = `好事 (Lv.${newGood.score || 1})`;
+                // 直接呼叫 updateCardUI 來更新介面並喚醒按鈕
+                updateCardUI(newGood);
             }
         } catch (e) { 
             console.error(e);
