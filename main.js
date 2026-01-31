@@ -512,12 +512,13 @@ function createPKScreenHTML() {
                                 const newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
                                 
                                 // [修正] 開局抽卡也保留靜態紀錄，保持體驗一致
-                const el = document.getElementById(loadingId);
-                if(el) {
-                    el.innerText = "✅ 已選出好事卡。";
-                    el.style.color = "#DDD";
-                    el.id = "";
-                }
+                                const el = document.getElementById(loadingId);
+                                if(el) {
+                                    el.innerText = "✅ 已選出好事卡。";
+                                    el.style.color = "#DDD";
+                                    el.style.marginBottom = "75px";
+                                    el.id = "";
+                                }
 
                                 if (!newGood || newGood === "AI_FAILED") {
                                     addChatMessage('system', "AI 暫時找不到適合的好事卡，請點擊鳥事卡再次嘗試。", true);
@@ -1411,6 +1412,7 @@ async function startPK(data, collectionSource, options = {}) {
                     if(el) {
                         el.innerText = "✅ 已選出好事卡。";
                         el.style.color = "#DDD";
+                        el.style.marginBottom = "75px";
                         el.id = "";
                     }
                 };
@@ -2720,8 +2722,9 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                 const el = document.getElementById(loadingId);
                 if(el) {
                     el.innerText = "✅ 已選出好事卡。";
-                    el.style.color = "#DDD"; // 讓顏色變更淡，像背景一樣
-                    el.id = ""; // 移除 ID 避免重複抓取
+                    el.style.color = "#DDD";
+                    el.style.marginBottom = "75px";
+                    el.id = "";
                 }
                 
                 if (!newGood) {
