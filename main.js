@@ -664,10 +664,10 @@ function createSearchHTML() {
             resultList.innerHTML = '<div style="text-align:center; color:#999; margin-top:20px;">搜尋中...</div>';
             
             try {
-                // 使用 getMyCollection，移除 where
-                const p1 = getDocs(query(getMyCollection("bad_things"), orderBy("createdAt", "desc"), limit(30)));
-                const p2 = getDocs(query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(30)));
-                const p3 = getDocs(query(getMyCollection("pk_wins"), orderBy("createdAt", "desc"), limit(30)));
+                // 使用 getMyCollection，移除 where，並移除 limit 以搜尋全部
+                const p1 = getDocs(query(getMyCollection("bad_things"), orderBy("createdAt", "desc")));
+                const p2 = getDocs(query(getMyCollection("good_things"), orderBy("createdAt", "desc")));
+                const p3 = getDocs(query(getMyCollection("pk_wins"), orderBy("createdAt", "desc")));
                 
                 const [badSnap, goodSnap, winSnap] = await Promise.all([p1, p2, p3]);
 
@@ -1221,8 +1221,8 @@ async function startPK(data, collectionSource, options = {}) {
     if (data.chatLogs && Array.isArray(data.chatLogs)) {
         data.chatLogs.forEach(log => {
              if (log.role === 'system') {
-                 // 匹配 "已淘汰「...」" 或 "新好事卡為（...）"
-                 const m1 = log.text.match(/已淘汰「(.*?)」/);
+                 // 匹配 "「...」暫時落敗" (配合使用者偏好) 或 "新好事卡為（...）"
+                 const m1 = log.text.match(/「(.*?)」暫時落敗/);
                  if (m1) currentPKContext.shownGoodCardIds.push(m1[1]);
                  const m2 = log.text.match(/新好事卡為（(.*?)）/);
                  if (m2) currentPKContext.shownGoodCardIds.push(m2[1]);
@@ -1291,8 +1291,8 @@ async function startPK(data, collectionSource, options = {}) {
         // 自動執行抽卡
         (async () => {
             try {
-                // [修正] 改用 getMyCollection
-                const querySnapshot = await getDocs(query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(1000)));
+                // [修正] 改用 getMyCollection，移除 limit 以讀取所有好事卡
+                const querySnapshot = await getDocs(query(getMyCollection("good_things"), orderBy("createdAt", "desc")));
                 if (!querySnapshot.empty) {
                     // [新增] 建立 Loading UI
                     const loadingId = 'card-loading-' + Date.now();
@@ -2343,11 +2343,11 @@ async function loadWarehouseData(type) {
     }
 
     try {
-        // [策略修正] 1. 資料庫查詢：使用 getMyCollection (自動鎖定使用者，無需 where uid)
-    const q = query(getMyCollection(collectionName), orderBy("createdAt", "desc"), limit(100));
+        // [策略修正] 1. 資料庫查詢：使用 getMyCollection，移除 limit 以讀取全部資料
+    const q = query(getMyCollection(collectionName), orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
         
-        listEl.innerHTML = ''; 
+        listEl.innerHTML = '';
 
         if (querySnapshot.empty) {
             listEl.innerHTML = `<div style="text-align:center; color:#CCC; margin-top:50px; line-height:1.6;">${emptyMsg}</div>`;
@@ -2520,8 +2520,8 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
         floatArea.innerHTML = ''; 
 
         try {
-            // [修正] 改用 getMyCollection
-            const q = query(getMyCollection("good_things"), orderBy("createdAt", "desc"), limit(1000));
+            // [修正] 改用 getMyCollection，移除 limit
+            const q = query(getMyCollection("good_things"), orderBy("createdAt", "desc"));
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
                 if (currentPKContext.good?.id) currentPKContext.shownGoodCardIds.push(currentPKContext.good.id);
