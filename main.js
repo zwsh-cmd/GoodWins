@@ -1588,7 +1588,7 @@ async function callGeminiChat(userMessage, isHidden = false) {
              contents.push({ role: 'user', parts: [{ text: userMessage }] });
         }
         
-        // [核心修改] Prompt：保留原文字，僅修改【當前戰況數據】與最後的【回應限制】
+        // [核心修改] Prompt：調整回應順序 (同理 -> 分析 -> 說服) 並保留字數限制
         const systemInstruction = `
 【角色設定】
 你是「GoodWins」的價值鑑定師。你具備專業的洞察力，但語氣溫暖、平易近人，像是一個**理性又懂你的好朋友**。
@@ -1606,11 +1606,12 @@ ${reasonText}
 
 模式一：PK 開局（當收到新的「鳥事」或需要「重抽」時啟動）
 	1. **溫和同理**：先接住使用者的情緒，承認那件鳥事確實令人困擾（例如：「這聽起來真的很煩」、「遇到這種事誰都會傻眼」）。
-	2. **理性翻轉（關鍵）**：提出這張「好事卡」作為反證。
+	2. **主題聯結性分析**：在進入說服前，必須先用兩句話點出為何選這張卡（參考【選牌邏輯】），建立兩者之間的關聯。
+	3. **理性翻轉與說服（關鍵）**：提出這張「好事卡」作為反證。
 	   - **焦點轉移**：不要硬說「善行是普遍的」，而是強調「這件善行是真實存在的」。
 	   - **價值對比**：解釋為什麼這件好事的「質感」或「對心靈的滋養」，足以抵銷或平衡那件鳥事的消耗。
 	   - **以柔克剛**：如果好事卡等級較低，請強調為什麼這張好事卡實際價值高於鳥事卡。
-	   - **扭轉局面**：必須切題，不是一味地要使用者看到光明面，要試著去說服使用者「這件好事」跟「鳥事」之間有什麼關聯性、為何這件好事可以扭轉局面抵銷鳥事帶來的負面影響。
+	   - **扭轉局面**：必須切題，不是一味地要使用者看到光明面，要試著去說服使用者為何這張好事卡可以扭轉局面、抵銷鳥事卡帶來的不適。
 	   - **切合問題面向**：舉例，自動判斷使用者問題的面向，若是基督信仰問題，就從基督信仰觀點回答。以此類推。
 
 模式二：自然對話（當使用者回應後啟動）
@@ -1630,8 +1631,7 @@ ${reasonText}
    - 語氣要堅定但溫柔，展現出「我懂你，但這件事值得你看看」的態度。
 
 【回應限制】
-1. **主題聯結性分析**：在 AI 回話時，必須加上兩句短短的主題聯結性分析，說明為何選這張卡（請參考【選牌邏輯】）。
-2. **總字數**：整體回應（包含上述分析與所有對話內容）請嚴格控制在 **200 個中文字以內**。
+1. **總字數**：整體回應（包含上述分析與所有對話內容）請嚴格控制在 **200 個中文字以內**。
         `;
 
         let loopSuccess = false; // [修改] 區域變數
@@ -2610,12 +2610,24 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
              addChatMessage('user', "還是覺得這件鳥事比較強... 😤", true);
         }
         
-        const defeatedTitle = currentPKContext.good?.title;
-        // [修正] 若有好事卡標題則顯示落敗，若無(如未知好事)則僅顯示收到
+        // [修正] 先暫存即將落敗的卡片，用於顯示訊息與黑名單處理
+        const defeatedCard = currentPKContext.good;
+        const defeatedTitle = defeatedCard?.title;
+
+        // [修正] 若有好事卡標題則顯示落敗，若無(如 AI 失敗過)則僅顯示收到，避免誤顯示上一張
         const sysMsg = defeatedTitle 
             ? `收到。「${defeatedTitle}」暫時落敗。\n正在運用創意召喚新卡片進行對決。`
             : "收到。\n正在運用創意召喚新卡片進行對決。";
         addChatMessage('system', sysMsg, true);
+
+        // [關鍵邏輯] 1. 立即將落敗卡片加入黑名單 (移轉自下方的邏輯，確保狀態一致)
+        if (defeatedCard?.id) {
+            currentPKContext.shownGoodCardIds.push(defeatedCard.id);
+            if (currentPKContext.shownGoodCardIds.length > 18) currentPKContext.shownGoodCardIds.shift();
+        }
+
+        // [關鍵邏輯] 2. 立即清空當前好事卡，確保若等一下 AI 失敗，再次點擊時不會抓到舊標題
+        currentPKContext.good = null;
 
         // 重置標題與位階標題
         document.getElementById('pk-good-title').innerText = "重新部署中...";
