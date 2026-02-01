@@ -811,6 +811,14 @@ if(btnExitPK) {
         const confirmExit = await showConfirmMessage(promptMsg, "確定離開", "取消");
         if (!confirmExit) return; 
 
+        // [新增] 離開時的狀態判定
+        if (currentPKContext.good) {
+            // 已選出好事卡卻離開 -> 紀錄為判定落敗 (鳥事勝出)
+            await addChatMessage('system', "挑戰者中途離席，判定鳥事勝出。", true);
+        } else {
+            // 尚未選出 -> 主動停止挑選 (由 performExit 中的 abortController 處理)
+        }
+
         try {
             // 如果是 Re-PK 失敗，必須刪除勝利紀錄並重置鳥事卡
             if (currentPKContext.wasDefeated && currentPKContext.docId) {
@@ -1899,6 +1907,19 @@ async function restoreTrash(trashId) {
 
 // 產生垃圾桶畫面
 async function createTrashHTML() {
+    // [新增] 自動清理逾期垃圾 (30天)
+    try {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        // 查詢 delTime 小於 30天前 的文件
+        const qExpired = query(getMyCollection("trash_bin"), where("delTime", "<", thirtyDaysAgo));
+        const snapshot = await getDocs(qExpired);
+        if (!snapshot.empty) {
+            const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+            await Promise.all(deletePromises);
+            console.log(`[系統] 已自動清除 ${snapshot.size} 筆逾期垃圾`);
+        }
+    } catch (e) { console.error("Auto-clean trash error:", e); }
+
     const iconRestore = `<svg style="pointer-events:none; width:16px; height:16px; fill:none; stroke:#2196F3; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>`;
 
     const trashHTML = `
