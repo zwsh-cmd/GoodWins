@@ -811,12 +811,11 @@ if(btnExitPK) {
         const confirmExit = await showConfirmMessage(promptMsg, "確定離開", "取消");
         if (!confirmExit) return; 
 
-        // [新增] 離開時的狀態判定
-        if (currentPKContext.good) {
-            // 已選出好事卡卻離開 -> 紀錄為判定落敗 (鳥事勝出)
+        // [新增] 強制中斷任何正在進行的抽卡，並寫入離席紀錄
+        // 只要還沒勝利，且不是回顧模式，離開都算失敗或中斷
+        if (!currentPKContext.isVictory && currentPKContext.collection !== 'pk_wins') {
+            currentPKContext.drawingId = null; // 殺死正在跑的抽卡 (關鍵：這會阻擋殭屍寫入)
             await addChatMessage('system', "挑戰者中途離席，判定鳥事勝出。", true);
-        } else {
-            // 尚未選出 -> 主動停止挑選 (由 performExit 中的 abortController 處理)
         }
 
         try {
@@ -1246,8 +1245,10 @@ async function startPK(data, collectionSource, options = {}) {
         isVictory: false,
         pointsToDeduct: (collectionSource === 'pk_wins' ? (data.score || 0) : 0),
         shownGoodCardIds: [], // [新增] 紀錄本場對話出現過的好事卡 ID
-        excludeTitles: []     // [新增] 紀錄歷史勝利的好事卡標題
+        excludeTitles: [],    // [新增] 紀錄歷史勝利的好事卡標題
+        drawingId: Date.now() // [新增] 抽卡批號，防止重複與殭屍執行
     };
+    const thisRunId = currentPKContext.drawingId; // 鎖定本次執行的 ID
 
     // [修正] 如果是「再擊敗」，必須將上次贏的那張好事卡(excludeGoodTitle)也加入黑名單
     if (options.excludeGoodTitle) {
@@ -1466,8 +1467,8 @@ async function startPK(data, collectionSource, options = {}) {
                 const el = document.getElementById(loadingId);
                 if(el) el.remove();
 
-                // 除非使用者已經搶斷，否則使用 AI 結果更新 UI
-                if (!userIntervened) {
+                // [修正] 檢查 ID 是否過期 (防止使用者已離開或已手動抽卡)
+                if (currentPKContext.drawingId === thisRunId && !userIntervened) {
                     if (!aiPicked || aiPicked === "AI_FAILED") {
                          addChatMessage('system', "AI 暫時找不到適合的好事卡，請手動隨機抽卡。", true);
                          return;
@@ -2624,8 +2625,12 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
     }
 
     if (winner === 'bad') {
-        // --- 使用者選了鳥事 (戰中換牌) --- 按下卡片自動開始召喚，不顯示按鈕
+        // --- 使用者選了鳥事 (戰中換牌) ---
         
+        // 更新抽卡批號 (這會讓之前的非同步抽卡在回來時檢測到過期而終止)
+        currentPKContext.drawingId = Date.now();
+        const thisRunId = currentPKContext.drawingId;
+
         // [修正] 只有在非自訂指令時，才顯示預設的抱怨文字
         if (!isCustomInput) {
              addChatMessage('user', "還是覺得這件鳥事比較強... 😤", true);
@@ -2795,6 +2800,12 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                 
                 const el = document.getElementById(loadingId);
                 if(el) el.remove(); // 移除 Loading
+
+                // [重點修正] 檢查 ID 是否過期 (防止重複與殭屍狀態)
+                if (currentPKContext.drawingId !== thisRunId) {
+                    console.log("偵測到過期抽卡，已攔截");
+                    return;
+                }
 
                 if (!newGood) {
                     if (useTrueRandom) {
