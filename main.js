@@ -1110,6 +1110,7 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
     }));
 
     // [核心修改] Prompt：將「循序掃描」改為「全域審視」，並將高分卡門檻放寬至 Lv.3-5
+    // [修改] 要求回傳 JSON 格式以包含選牌理由
     const selectionPrompt = `
     任務：你是「GoodWins」APP 的邏輯演算中樞。你的任務是「價值平衡運算 (Value Equilibrium Calculation)」**。
     目標：從清單中計算出唯一一張能對【眼前鳥事】進行「有效補償」的卡片。
@@ -1145,11 +1146,14 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
     【執行程序】
     1. **掃描 (Scan)**：讀取所有候選卡片。
     2. **驗證 (Validate)**：對每一張卡片套用【邏輯二】。
-       - 拿著「公道檢測儀」檢查：這張別人的卡片，能證明「努力有回報」嗎？不能就刪。
     3. **計算 (Calculate)**：在通過驗證的卡片中，選出能量最強（最能抵銷鳥事虧損）的一張。
 
     【輸出規定】
-    請深思熟慮後，**只回傳**該卡片的 ID (純字串)，不要有任何解釋。
+    請回傳一個標準的 **JSON 物件** (不要包含 Markdown 格式，只要純 JSON 字串)，格式如下：
+    {
+      "id": "選出的卡片ID",
+      "reasoning": "請用一句話說明主題關聯性：這張卡的哪個特點（如：溫暖人情）正好是該鳥事（如：冷漠都市）的解藥。"
+    }
     `;
 
     const modelList = await getSortedModelList(apiKey);
@@ -1171,7 +1175,7 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ role: 'user', parts: [{ text: selectionPrompt }] }],
-                    generationConfig: { temperature: temperature } 
+                    generationConfig: { temperature: temperature, responseMimeType: "application/json" } // [新增] 指定 JSON 模式
                 })
             });
 
@@ -1179,10 +1183,23 @@ async function aiPickBestCard(badData, candidateDocs, excludeList = [], statusCa
             
             if (data.error) throw new Error(data.error.message);
 
-            const selectedId = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-            if (selectedId) {
-                const bestDoc = finalCandidates.find(doc => doc.id === selectedId);
-                return bestDoc ? { id: bestDoc.id, ...bestDoc.data() } : null;
+            let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (rawText) {
+                // [新增] JSON 解析與錯誤處理
+                rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                
+                try {
+                    const resultJson = JSON.parse(rawText);
+                    if (resultJson && resultJson.id) {
+                        const bestDoc = finalCandidates.find(doc => doc.id === resultJson.id);
+                        // 回傳時，將 reasoning 一併帶上
+                        return bestDoc ? { id: bestDoc.id, ...bestDoc.data(), reasoning: resultJson.reasoning } : null;
+                    }
+                } catch (jsonErr) {
+                    console.warn("JSON 解析失敗，嘗試視為純 ID 處理...", rawText);
+                    const bestDoc = finalCandidates.find(doc => doc.id === rawText);
+                    return bestDoc ? { id: bestDoc.id, ...bestDoc.data(), reasoning: "AI 未提供詳細關聯理由" } : null;
+                }
             }
         } catch (e) {
             console.warn(`[選牌] 模型 ${model.id} 失敗，嘗試下一個...`, e.message);
@@ -1447,6 +1464,10 @@ async function startPK(data, collectionSource, options = {}) {
                          addChatMessage('system', "AI 暫時找不到適合的好事卡，請手動隨機抽卡。", true);
                          return;
                     }
+                    
+                    // [修改] 將選牌理由存入 Context，供對話 AI 使用
+                    currentPKContext.matchReason = aiPicked.reasoning || "AI 依據直覺選出了這張牌。";
+
                     updateCardUI(aiPicked);
                     // [修正] 成功選出後寫入紀錄
                     addChatMessage('system', "✅ 已選出好事卡。", true);
@@ -1545,6 +1566,8 @@ async function callGeminiChat(userMessage, isHidden = false) {
         const good = currentPKContext.good;
         const badText = bad ? `標題：${bad.title}\n內容：${bad.content}` : "未知";
         const goodText = good ? `標題：${good.title}\n內容：${good.content}` : "未知";
+        // [新增] 取得選牌理由
+        const reasonText = currentPKContext.matchReason || "請自行分析兩者關聯";
         
         let contents = [];
         let lastRole = null;
@@ -1565,6 +1588,7 @@ async function callGeminiChat(userMessage, isHidden = false) {
              contents.push({ role: 'user', parts: [{ text: userMessage }] });
         }
         
+        // [核心修改] Prompt：保留原文字，僅修改【當前戰況數據】與最後的【回應限制】
         const systemInstruction = `
 【角色設定】
 你是「GoodWins」的價值鑑定師。你具備專業的洞察力，但語氣溫暖、平易近人，像是一個**理性又懂你的好朋友**。
@@ -1575,6 +1599,8 @@ async function callGeminiChat(userMessage, isHidden = false) {
 ${badText}
 * 你出的好事卡（Good Card）：
 ${goodText}
+* 【選牌邏輯（為何選這張牌）】：
+${reasonText}
 
 【核心任務流程】 請依照當下的對話狀態，嚴格執行以下三種模式之一：
 
@@ -1597,13 +1623,15 @@ ${goodText}
 
 【語氣與用語規範】
 ❌ **禁止**：
-   - 禁止過度說教（如：我們要轉念、世界很美好）。
+   - 禁止說教（如：我們要轉念、世界很美好）。
    - 禁止過於油腔滑調或刻意搞笑。
 ✅ **建議**：
    - 使用台灣日常口語（如：很煩、傻眼、太誇張了、其實蠻溫暖的）。
    - 語氣要堅定但溫柔，展現出「我懂你，但這件事值得你看看」的態度。
 
-【回應限制】請將回應長度控制在 200 個中文字以內。
+【回應限制】
+1. **主題聯結性分析**：在 AI 回話時，必須加上兩句短短的主題聯結性分析，說明為何選這張卡（請參考【選牌邏輯】）。
+2. **總字數**：整體回應（包含上述分析與所有對話內容）請嚴格控制在 **200 個中文字以內**。
         `;
 
         let loopSuccess = false; // [修改] 區域變數
@@ -2712,6 +2740,9 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                         const selectedDoc = candidates[randomIndex];
                         newGood = { id: selectedDoc.id, ...selectedDoc.data() };
                         
+                        // [修改] 隨機模式下，手動給予理由
+                        currentPKContext.matchReason = "這是一張隨機抽選的命運之牌，請嘗試找出它與鳥事的隱藏連結。";
+
                         // 模擬一點點延遲，讓體驗更自然
                         await new Promise(r => setTimeout(r, 600));
                     } else {
@@ -2722,6 +2753,11 @@ async function handlePKResult(winner, isCustomInput = false, useTrueRandom = fal
                 } else {
                     // --- AI 推薦模式 ---
                     newGood = await aiPickBestCard(currentPKContext.bad, querySnapshot.docs, currentPKContext.shownGoodCardIds, updateStatus);
+                    
+                    // [修改] 儲存 AI 的選牌理由
+                    if (newGood) {
+                        currentPKContext.matchReason = newGood.reasoning || "AI 認為這張牌具有潛在的抵銷力量。";
+                    }
                 }
                 
                 const el = document.getElementById(loadingId);
