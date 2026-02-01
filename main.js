@@ -1527,7 +1527,7 @@ async function addChatMessage(sender, text, saveToDb = true, modelName = null) {
 // 3. 呼叫 Gemini API (包含對話記憶與完整 Prompt 邏輯)
 async function getSortedModelList(apiKey) {
     // 順位機制主要用於應對個別模型的 RPM (每分鐘請求限制) 塞車問題，而非總額度耗盡。
-    console.log("系統設定：鎖定 3.0 F -> 2.5 F -> 1.5 穩定備援路徑");
+    console.log("系統設定：鎖定 3.0 F -> 2.5 F -> 2.5 FL 穩定備援路徑");
     
     return [
         { id: 'gemini-3-flash-preview', displayName: 'Gemini 3.0 Flash (最新版)' },
