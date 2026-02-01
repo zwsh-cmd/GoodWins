@@ -1539,7 +1539,7 @@ async function getSortedModelList(apiKey) {
     console.log("系統設定：鎖定 3.0 F -> 2.5 F -> 2.5 FL 穩定備援路徑");
     
     return [
-        { id: 'gemini-3-flash-preview', displayName: 'Gemini 3.0 Flash (最新版)' },
+        { id: 'gemini-3-flash-preview', displayName: 'Gemini 3 Flash Preview' },
         { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' },
         { id: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash-Lite' }
     ];
@@ -1961,6 +1961,13 @@ async function createTrashHTML() {
         let title = '';
         let content = '';
 
+        // [新增] 計算剩餘天數
+        const delTime = item.delTime ? item.delTime.toDate() : new Date();
+        const expireTime = new Date(delTime.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const now = new Date();
+        const daysLeft = Math.ceil((expireTime - now) / (1000 * 60 * 60 * 24));
+        const daysText = daysLeft > 0 ? ` (${daysLeft}天後刪除)` : " (即將刪除)";
+
         if(item.originCol === 'pk_wins') {
             color = '#E0C060';
             typeLabel = 'PK勝利';
@@ -1985,7 +1992,9 @@ async function createTrashHTML() {
         div.style.cssText = `background:#FFF; padding:15px; border-radius:12px; border:1px solid #F0F0F0; border-left:4px solid ${color}; display:flex; align-items:center; gap:10px;`;
         div.innerHTML = `
             <div style="flex:1; overflow:hidden;">
-                <div style="font-size:10px; color:${color}; font-weight:bold; margin-bottom:2px;">${typeLabel}</div>
+                <div style="font-size:10px; color:${color}; font-weight:bold; margin-bottom:2px;">
+                    ${typeLabel}<span style="color:#CCC; font-weight:normal;">${daysText}</span>
+                </div>
                 <div style="font-weight:bold; color:#333; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${title}</div>
                 <div style="font-size:12px; color:#999; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden;">${content || ''}</div>
             </div>
